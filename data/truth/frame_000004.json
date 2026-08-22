@@ -1,0 +1,57 @@
+{
+  "file": "frame_000004.png",
+  "width": 800,
+  "height": 600,
+  "center_px": [
+    498.69,
+    347.35
+  ],
+  "center_mm": [
+    9.87,
+    4.74
+  ],
+  "angle_deg": -7.327,
+  "scale": 0.902,
+  "brightness": 1.01,
+  "holes_px": [
+    [
+      533.97,
+      393.04
+    ],
+    [
+      453.0,
+      382.63
+    ],
+    [
+      463.41,
+      301.66
+    ],
+    [
+      544.38,
+      312.07
+    ]
+  ],
+  "keyway_center_px": [
+    580.99,
+    357.93
+  ],
+  "defects": [
+    {
+      "type": "chip",
+      "center_px": [
+        557.09,
+        413.7
+      ],
+      "radius_px": 16.35
+    },
+    {
+      "type": "stain",
+      "center_px": [
+        529.92,
+        352.53
+      ],
+      "radius_px": 11.76
+    }
+  ],
+  "is_ng": true
+}

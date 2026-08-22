@@ -1,0 +1,61 @@
+{
+  "file": "frame_000001.png",
+  "width": 800,
+  "height": 600,
+  "center_px": [
+    454.79,
+    287.78
+  ],
+  "center_mm": [
+    5.48,
+    -1.22
+  ],
+  "angle_deg": 21.516,
+  "scale": 1.0395,
+  "brightness": 0.838,
+  "holes_px": [
+    [
+      515.81,
+      314.29
+    ],
+    [
+      428.28,
+      348.79
+    ],
+    [
+      393.78,
+      261.27
+    ],
+    [
+      481.3,
+      226.76
+    ]
+  ],
+  "keyway_center_px": [
+    543.76,
+    252.7
+  ],
+  "defects": [
+    {
+      "type": "bolt_shift",
+      "hole_index": 2,
+      "shift_mm": [
+        -0.77,
+        0.81
+      ],
+      "new_center_px": [
+        389.44,
+        272.02
+      ]
+    },
+    {
+      "type": "bolt_missing",
+      "hole_index": 0,
+      "center_px": [
+        515.81,
+        314.29
+      ]
+    }
+  ],
+  "is_ng": true
+}
