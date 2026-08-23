@@ -1,0 +1,333 @@
+<!DOCTYPE html>
+<!-- ============================================================
+     dashboard/templates/index.html —— 生产看板单页（ECharts CDN 版）
+     ------------------------------------------------------------
+     数据来源（由 dashboard/app.py 提供）：
+       GET /api/state   轮询接口：最新帧图 URL、最新结果、统计汇总、
+                        最近 50 条记录、节拍序列
+       POST /api/trigger 手动触发一次检测（写 Modbus HR0=1）
+     页面布局：
+       [顶栏] 标题 | 统计徽章(总数/OK/NG/FAULT) | 手动触发按钮+状态文字
+       [左列] 当前帧标注图 + 最新结果摘要条
+       [右列] 良率仪表盘 / 单件节拍曲线 / NG 类型饼图
+       [底部] 最近 50 条检测记录表
+     刷新策略：每 1.5s 轮询一次；标注图仅在 mtime 变化时才更新 src，
+     避免无谓重载闪烁。所有图表在窗口缩放时自动 resize。
+     ============================================================ -->
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>工件视觉检测看板（仿真版）</title>
+<!-- ECharts 由 CDN 加载；主源失败时自动切换备用源（见底部脚本） -->
+<script src="https://cdn.jsdelivr.net/npm/echarts@5.5.0/dist/echarts.min.js"
+        onerror="window.__echartsFailed=true"></script>
+<style>
+  /* ---------- 全局深色工业风 ---------- */
+  :root {
+    --bg: #10151c;         /* 页面背景 */
+    --card: #1a212b;       /* 卡片背景 */
+    --line: #2a3442;       /* 分隔线 */
+    --txt: #cfd8e3;        /* 主文字 */
+    --dim: #7d8a99;        /* 次要文字 */
+    --ok: #37b24d;         /* OK 绿 */
+    --ng: #f03e3e;         /* NG 红 */
+    --fault: #f59f00;      /* FAULT 橙 */
+    --accent: #4dabf7;     /* 强调蓝 */
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body {
+    background: var(--bg); color: var(--txt);
+    font-family: "Microsoft YaHei", "PingFang SC", sans-serif;
+    padding: 14px;
+  }
+  .card {
+    background: var(--card); border: 1px solid var(--line);
+    border-radius: 10px; padding: 12px;
+  }
+  h2 { font-size: 14px; color: var(--dim); font-weight: normal;
+       margin-bottom: 8px; letter-spacing: 1px; }
+
+  /* ---------- 顶栏 ---------- */
+  header { display: flex; align-items: center; gap: 16px;
+           margin-bottom: 14px; flex-wrap: wrap; }
+  header .title { font-size: 20px; font-weight: bold; }
+  header .title small { color: var(--dim); font-size: 12px; margin-left: 8px; }
+  .badge { padding: 4px 12px; border-radius: 6px; font-size: 13px;
+           background: #222c38; border: 1px solid var(--line); }
+  .badge b { font-size: 15px; margin-left: 4px; }
+  .spacer { flex: 1; }
+  #btnTrigger {
+    background: var(--accent); color: #06121d; border: none;
+    padding: 9px 22px; border-radius: 8px; font-size: 14px;
+    font-weight: bold; cursor: pointer;
+  }
+  #btnTrigger:disabled { opacity: .45; cursor: not-allowed; }
+  #trigMsg { font-size: 12px; color: var(--dim); max-width: 340px; }
+
+  /* ---------- 主网格 ---------- */
+  main { display: grid; grid-template-columns: minmax(380px, 46%) 1fr;
+         gap: 14px; }
+  @media (max-width: 900px) { main { grid-template-columns: 1fr; } }
+  .leftcol { display: flex; flex-direction: column; gap: 14px; }
+  .rightcol { display: flex; flex-direction: column; gap: 14px; }
+  .chart { width: 100%; height: 215px; }
+
+  /* 当前帧图像区 */
+  #imgWrap { display: flex; align-items: center; justify-content: center;
+             min-height: 300px; position: relative;
+             background: #0c1117; border-radius: 8px; overflow: hidden; }
+  #latestImg { max-width: 100%; max-height: 430px; display: block; }
+  #imgPlaceholder { color: var(--dim); font-size: 13px; }
+
+  /* 最新结果摘要条 */
+  #summary { display: flex; gap: 10px; flex-wrap: wrap; font-size: 13px; }
+  .kv { background: #141b24; border: 1px solid var(--line);
+        border-radius: 6px; padding: 5px 10px; }
+  .kv span { color: var(--dim); margin-right: 6px; }
+  #sumResult.OK  { color: var(--ok); font-weight: bold; }
+  #sumResult.NG  { color: var(--ng); font-weight: bold; }
+
+  /* ---------- 记录表 ---------- */
+  table { width: 100%; border-collapse: collapse; font-size: 13px; }
+  th, td { text-align: left; padding: 6px 10px;
+           border-bottom: 1px solid var(--line); white-space: nowrap; }
+  th { color: var(--dim); font-weight: normal; position: sticky; top: 0;
+       background: var(--card); }
+  td.num { font-family: Consolas, monospace; }
+  tr.OK  td:nth-child(3) { color: var(--ok); font-weight: bold; }
+  tr.NG  td:nth-child(3) { color: var(--ng);  font-weight: bold; }
+  tr.FAULT td:nth-child(3) { color: var(--fault); font-weight: bold; }
+  .truth-dim { color: var(--dim); }
+</style>
+</head>
+<body>
+
+<!-- ===================== 顶栏 ===================== -->
+<header>
+  <div class="title">工件视觉定位与缺陷检测看板<small>仿真版 · 所有指标为仿真验证值</small></div>
+  <div class="badge">累计 <b id="stTotal">0</b></div>
+  <div class="badge" style="color:var(--ok)">OK <b id="stOk">0</b></div>
+  <div class="badge" style="color:var(--ng)">NG <b id="stNg">0</b></div>
+  <div class="badge" style="color:var(--fault)">故障 <b id="stFault">0</b></div>
+  <div class="spacer"></div>
+  <span id="trigMsg"></span>
+  <button id="btnTrigger">手动触发检测</button>
+</header>
+
+<!-- ===================== 主网格 ===================== -->
+<main>
+  <!-- 左列：当前帧 + 结果摘要 -->
+  <div class="leftcol">
+    <div class="card">
+      <h2>当前帧标注图（plc_server 实时写入）</h2>
+      <div id="imgWrap">
+        <span id="imgPlaceholder">等待第一帧……请先启动 python plc_link/plc_server.py 并触发检测</span>
+        <img id="latestImg" alt="" style="display:none">
+      </div>
+    </div>
+    <div class="card">
+      <h2>最新结果摘要</h2>
+      <div id="summary">
+        <div class="kv"><span>判定</span><span id="sumResult">—</span></div>
+        <div class="kv"><span>缺陷类型</span><span id="sumTypes">—</span></div>
+        <div class="kv"><span>置信度</span><span id="sumConf">—</span></div>
+        <div class="kv"><span>耗时</span><span id="sumMs">—</span></div>
+        <div class="kv"><span>孔位最大偏移</span><span id="sumHole">—</span></div>
+        <div class="kv"><span>定位角度</span><span id="sumAngle">—</span></div>
+      </div>
+    </div>
+  </div>
+
+  <!-- 右列：三张图表 -->
+  <div class="rightcol">
+    <div class="card"><h2>良率仪表盘（OK/(OK+NG)，不含故障）</h2><div id="gauge" class="chart"></div></div>
+    <div class="card"><h2>单件节拍曲线（最近 120 件，ms）</h2><div id="beat" class="chart"></div></div>
+    <div class="card"><h2>NG 缺陷类型分布</h2><div id="pie" class="chart"></div></div>
+  </div>
+</main>
+
+<!-- ===================== 记录表 ===================== -->
+<div class="card" style="margin-top:14px">
+  <h2>最近 50 条检测记录（新→旧）</h2>
+  <table>
+    <thead><tr>
+      <th>#</th><th>时间</th><th>结果</th><th>检出缺陷</th>
+      <th>孔位最大偏移 mm</th><th>置信度</th><th>节拍 ms</th><th>真值(仿真)</th>
+    </tr></thead>
+    <tbody id="tbody"></tbody>
+  </table>
+</div>
+
+<script>
+/* ================================================================
+ * 看板前端逻辑：轮询 /api/state 刷新全部组件；POST /api/trigger 触发。
+ * ================================================================ */
+
+/* ---------- ECharts 加载失败时的备用源兜底 ---------- */
+if (window.__echartsFailed) {
+  document.write('<script src="https://unpkg.com/echarts@5.5.0/dist/' +
+                 'echarts.min.js"><\/script>');
+}
+
+const $ = id => document.getElementById(id);
+
+/* ---------- 图表初始化 ---------- */
+const chGauge = echarts.init($('gauge'), null, {renderer: 'canvas'});
+const chBeat  = echarts.init($('beat'),  null, {renderer: 'canvas'});
+const chPie   = echarts.init($('pie'),   null, {renderer: 'canvas'});
+
+/* 良率仪表盘：分档着色（<90 红，90~98 黄，≥98 绿） */
+chGauge.setOption({
+  series: [{
+    type: 'gauge', min: 0, max: 100, startAngle: 210, endAngle: -30,
+    progress: {show: true, width: 14},
+    axisLine: {lineStyle: {width: 14}},
+    axisTick: {show: false}, splitLine: {length: 8},
+    axisLabel: {color: '#7d8a99', distance: 18, fontSize: 10},
+    pointer: {itemStyle: {color: '#4dabf7'}, width: 4},
+    anchor: {show: true, size: 10},
+    detail: {valueAnimation: true, fontSize: 26, offsetCenter: [0, '62%'],
+             formatter: '{value}%', color: '#cfd8e3'},
+    data: [{value: 0, name: '良率'}],
+    title: {offsetCenter: [0, '88%'], color: '#7d8a99', fontSize: 12},
+  }],
+});
+
+/* 节拍曲线：面积线 + 均值参考线 */
+chBeat.setOption({
+  grid: {left: 46, right: 16, top: 28, bottom: 26},
+  tooltip: {trigger: 'axis'},
+  xAxis: {type: 'category', data: [], axisLabel: {color: '#7d8a99'},
+          axisLine: {lineStyle: {color: '#2a3442'}}},
+  yAxis: {type: 'value', name: 'ms', axisLabel: {color: '#7d8a99'},
+          splitLine: {lineStyle: {color: '#1e2733'}}},
+  series: [{
+    name: '节拍', type: 'line', data: [], smooth: true, symbol: 'none',
+    lineStyle: {color: '#4dabf7', width: 2},
+    areaStyle: {opacity: 0.15, color: '#4dabf7'},
+    markLine: {data: [{type: 'average', name: '均值'}],
+               label: {formatter: '均值 {c}', color: '#7d8a99'},
+               lineStyle: {color: '#f59f00', type: 'dashed'}},
+  }],
+});
+
+/* NG 饼图：类型名 → 中文标签 */
+const TYPE_CN = {scratch: '划痕', chip: '崩边', stain: '污渍',
+                 bolt_shift: '孔偏移', bolt_missing: '孔缺失',
+                 locate_fail: '定位失败'};
+chPie.setOption({
+  tooltip: {trigger: 'item', formatter: '{b}: {c} 次 ({d}%)'},
+  legend: {bottom: 0, textStyle: {color: '#7d8a99', fontSize: 11}},
+  series: [{
+    type: 'pie', radius: ['38%', '66%'], center: ['50%', '44%'],
+    itemStyle: {borderRadius: 5, borderColor: '#1a212b', borderWidth: 2},
+    label: {color: '#cfd8e3', formatter: '{b}\n{d}%'},
+    data: [],
+  }],
+});
+
+/* ---------- 轮询刷新 ---------- */
+let polling = false;          // 防止上一轮请求未返回又发新一轮
+let imgMtime = null;          // 已展示的标注图修改时间
+
+function fmt(v, unit) { return v === null || v === undefined ? '—' : v + unit; }
+
+async function refresh() {
+  if (polling) return;
+  polling = true;
+  try {
+    const r = await fetch('/api/state');
+    const d = await r.json();
+    const st = d.stats;
+
+    // ---- 顶栏徽章 ----
+    $('stTotal').textContent = st.total;
+    $('stOk').textContent = st.ok;
+    $('stNg').textContent = st.ng;
+    $('stFault').textContent = st.fault;
+
+    // ---- 当前帧标注图（mtime 变了才刷新）----
+    if (d.latest.image_exists && d.latest.mtime !== imgMtime) {
+      imgMtime = d.latest.mtime;
+      const img = $('latestImg');
+      img.src = d.latest.image_url + '&' + Date.now();   // 双保险防缓存
+      img.style.display = 'block';
+      $('imgPlaceholder').style.display = 'none';
+    }
+
+    // ---- 最新结果摘要 ----
+    const res = d.latest.result;
+    if (res) {
+      const sr = $('sumResult');
+      sr.textContent = res.result || '—';
+      sr.className = res.result === 'OK' ? 'OK' : (res.result === 'NG' ? 'NG' : '');
+      $('sumTypes').textContent = (res.defect_types || []).join('、') || '无';
+      $('sumConf').textContent = fmt(res.confidence, '');
+      $('sumMs').textContent = fmt(res.duration_ms, ' ms');
+      $('sumHole').textContent = res.hole_max_offset_mm === null
+          ? '—' : fmt(res.hole_max_offset_mm, '');
+      $('sumAngle').textContent =
+          res.locate && res.locate.angle_deg !== undefined
+              ? fmt(res.locate.angle_deg, '°') : '—';
+    }
+
+    // ---- 良率仪表盘 ----
+    chGauge.setOption({series: [{data: [{value: st.yield_pct ?? 0,
+                                        name: '良率'}]}]});
+
+    // ---- 节拍曲线 ----
+    chBeat.setOption({xAxis: {data: st.beat_seq.map(String)},
+                      series: [{data: st.beat_ms}]});
+
+    // ---- NG 饼图 ----
+    chPie.setOption({series: [{data:
+      Object.entries(st.ng_types).map(([k, v]) =>
+          ({name: (TYPE_CN[k] || k) + ' ' + k, value: v}))}]});
+
+    // ---- 记录表 ----
+    $('tbody').innerHTML = d.records.map(r => `
+      <tr class="${r.result}">
+        <td class="num">${r.seq ?? ''}</td>
+        <td class="num">${r.ts}</td>
+        <td>${r.result}</td>
+        <td>${r.defect_types.map(t => TYPE_CN[t] || t).join('、') || '—'}</td>
+        <td class="num">${r.hole_max_offset_mm ?? '—'}</td>
+        <td class="num">${r.confidence ?? '—'}</td>
+        <td class="num">${r.duration_ms ?? '—'}</td>
+        <td class="truth-dim">${r.truth_defects.length
+            ? r.truth_defects.join('、') : 'OK件'}</td>
+      </tr>`).join('');
+  } catch (e) {
+    $('trigMsg').textContent = '轮询失败：' + e;
+  } finally {
+    polling = false;
+  }
+}
+setInterval(refresh, 1500);
+refresh();
+
+/* ---------- 手动触发 ---------- */
+$('btnTrigger').addEventListener('click', async () => {
+  const btn = $('btnTrigger');
+  btn.disabled = true;
+  $('trigMsg').textContent = '正在写入触发寄存器 HR0=1 ……';
+  try {
+    const r = await fetch('/api/trigger', {method: 'POST'});
+    const d = await r.json();
+    $('trigMsg').textContent = d.msg || (d.ok ? '已触发' : '触发失败');
+  } catch (e) {
+    $('trigMsg').textContent = '请求失败：' + e;
+  } finally {
+    btn.disabled = false;
+    setTimeout(() => { $('trigMsg').textContent = ''; }, 6000);
+  }
+});
+
+/* ---------- 窗口缩放自适应 ---------- */
+window.addEventListener('resize', () => {
+  chGauge.resize(); chBeat.resize(); chPie.resize();
+});
+</script>
+</body>
+</html>

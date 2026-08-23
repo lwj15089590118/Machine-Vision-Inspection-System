@@ -78,6 +78,11 @@ FACE_MASK_R_IN = 40.0         # 增益估计环内径（避开中心孔）
 FACE_MASK_R_OUT = 85.0        # 增益估计环外径（避开暗环/键槽）
 HOLE_MATCH_WIN_PX = 18.0      # 期望孔位与检测圆的匹配窗口（含偏移量上限）
 HOLE_RING_BAND = (44.0, 82.0) # 螺栓孔霍夫搜索环带（基准系半径）
+HOLE_EDGE_GUARD_PX = 3.0      # 未判异常孔的边缘保护圈外扩量（像素）：
+#   亚像素矫正残差会在高对比孔缘产生细长月牙差分（批量调参实测为 OK 件
+#   误报主源，质心集中在孔心 ±10px），在比对掩膜上把"孔半径+3px"圆域
+#   抠掉即可在源头抑制；保护圈只抠未判异常的孔——缺失/偏移孔需保留
+#   回填/新孔特征供佐证与分类。
 
 # 基准资产缓存（基准图 / 模糊基准 / 基准材料掩膜 / 基准外圆剖面）
 _REF_IMG = None
@@ -176,13 +181,21 @@ def _rim_profile(face_mask: np.ndarray) -> np.ndarray:
 # ================================================================
 # 分支 A：基准比对（面域缺陷）
 # ================================================================
-def diff_branch(warped: np.ndarray, exclude_pts: list = None) -> list:
+def diff_branch(warped: np.ndarray, exclude_pts: list = None,
+                exclude_r: float = 20.0,
+                hole_mask_pts: list = None) -> list:
     """
     基准比对：增益归一化 → 双边模糊 → absdiff → 自适应阈值 →
     形态学去噪 → 连通域提取 → 碎片聚类。
-    exclude_pts: 需要在碎片阶段直接剔除的基准系坐标点列表（已由几何
-    分支判定的孔事件位置，其回填/新孔 blob 不参与聚类，避免与路过
-    的划痕碎片合并后被整体跳过）。
+    exclude_pts:   需要在碎片阶段直接剔除的基准系坐标点列表（孔事件
+                   位置的碎片不参与聚类，避免与路过的划痕碎片合并后被
+                   整体跳过）；exclude_r 为剔除判定半径（px）。
+    hole_mask_pts: 在比对掩膜上抠掉的圆域圆心列表（未判异常螺栓孔的
+                   孔缘保护圈，半径 = BOLT_HOLE_R_PX + HOLE_EDGE_GUARD_PX），
+                   用于在源头抑制孔缘亚像素矫正残差月牙——按像素抠掩膜
+                   只损失缺陷与保护圈重叠的部分，不会像"按碎片质心剔除"
+                   那样把恰好压在孔附近的大块真实缺陷整团误吞（批量调参
+                   实测案例：距孔心仅 11px 的 807px² 污渍被整团剔除）。
     返回面域缺陷 blob 列表（基准系坐标）：
       {centroid(x,y), area_px, bbox(x,y,w,h), aspect, width_est, r_c}
     """
@@ -199,9 +212,20 @@ def diff_branch(warped: np.ndarray, exclude_pts: list = None) -> list:
     # 2) 双边模糊（抑制亚像素矫正残差在锐利孔边缘的细环假差）
     test_blur = cv2.GaussianBlur(test_norm, (3, 3), 0)
 
-    # 3) 比较掩膜：盘面内（避开外圆暗环 ±10px）且避开中心孔边带
+    # 3) 比较掩膜：盘面内（避开外圆暗环 ±10px）；中心孔与未判异常
+    #    螺栓孔统一用"半径+3px 边缘保护圈"从源头抑制矫正残差月牙，
+    #    内边界收窄到 +3px 可显著减少中心孔邻域污渍落入盲区
     compare_mask = ((rr <= config.FLANGE_R_PX - 10.0) &
-                    (rr >= config.CENTER_HOLE_R_PX + 6.0)).astype(np.uint8)
+                    (rr >= config.CENTER_HOLE_R_PX)).astype(np.uint8)
+    cv2.circle(compare_mask,
+               (int(config.CANON_CENTER[0]), int(config.CANON_CENTER[1])),
+               int(round(config.CENTER_HOLE_R_PX + HOLE_EDGE_GUARD_PX)),
+               0, -1)
+    if hole_mask_pts:
+        guard_r = int(round(config.BOLT_HOLE_R_PX + HOLE_EDGE_GUARD_PX))
+        for (px, py) in hole_mask_pts:
+            cv2.circle(compare_mask, (int(round(px)), int(round(py))),
+                       guard_r, 0, -1)
 
     # 4) absdiff + 自适应阈值（鲁棒统计：中位数+MAD）
     #    不能用 均值+kσ：缺陷自身的高差异像素会抬高档位，把弱缺陷
@@ -228,7 +252,7 @@ def diff_branch(warped: np.ndarray, exclude_pts: list = None) -> list:
         if area < config.MIN_BLOB_AREA_PX:
             continue                       # 小于最小面积按噪声丢弃
         fx, fy = float(cent[i][0]), float(cent[i][1])
-        if exclude_pts and any(math.hypot(fx - px, fy - py) < 20.0
+        if exclude_pts and any(math.hypot(fx - px, fy - py) < exclude_r
                                for px, py in exclude_pts):
             continue                       # 孔事件特征碎片（含偏移后的新孔位，
                                              # 注入偏移上限 15px+测量余量）
@@ -337,12 +361,75 @@ def _in_keyway_sector(bin_idx: int) -> bool:
 # ================================================================
 # 分支 C：几何测量（螺栓孔）
 # ================================================================
+def _bilinear_gray(img: np.ndarray, x: float, y: float):
+    """灰度图双线性插值采样（img 可为 uint8 或 float）；越界返回 None"""
+    h, w = img.shape[:2]
+    x0, y0 = int(math.floor(x)), int(math.floor(y))
+    if not (0 <= x0 < w - 1 and 0 <= y0 < h - 1):
+        return None
+    fx, fy = x - x0, y - y0
+    a = float(img[y0, x0])
+    b = float(img[y0, x0 + 1])
+    c = float(img[y0 + 1, x0])
+    d = float(img[y0 + 1, x0 + 1])
+    return (a * (1.0 - fx) * (1.0 - fy) + b * fx * (1.0 - fy) +
+            c * (1.0 - fx) * fy + d * fx * fy)
+
+
+def _refine_circle(warped: np.ndarray, c0: tuple, r0: float) -> tuple:
+    """
+    亚像素圆参数精修：霍夫粗值 → 径向灰度剖面 50% 交叉点 → 最小二乘圆拟合。
+    霍夫累加器只给整像素级（±1~2px）的圆心/半径，直接与 ±0.3mm
+    （直径 3px）公差比较时量化噪声即超差——批量验收中这是 OK 件误报的
+    第一大来源。本函数：
+      1) 以霍夫圆为初值，沿 36 条射线在 [r0-4, r0+4]px 范围采样灰度；
+      2) 每条射线找"孔内暗→盘面亮"的灰度 50% 交叉点，线性内插到亚像素；
+      3) 对全部交叉点做 Kasa 代数圆拟合，输出精确 (cx, cy, r)。
+    有效交叉点不足 12 个（污渍压孔/对比度异常）时退回霍夫粗值，保证鲁棒。
+    返回 (cx, cy, r)，坐标与半径单位均为像素。
+    """
+    rs = np.arange(max(r0 - 4.0, 3.0), r0 + 4.0 + 1e-6, 0.25)
+    pts = []
+    for k in range(36):
+        phi = 2.0 * math.pi * k / 36.0
+        dx, dy = math.cos(phi), math.sin(phi)
+        vals = []
+        for r in rs:
+            vals.append(_bilinear_gray(warped,
+                                       c0[0] + r * dx, c0[1] + r * dy))
+        if any(v is None for v in vals):
+            continue
+        vmin, vmax = min(vals), max(vals)
+        if vmax - vmin < 40.0:                 # 该方向无足够明暗过渡
+            continue
+        thr = 0.5 * (vmin + vmax)
+        for i in range(1, len(vals)):          # 由内向外找暗→亮 50% 交叉
+            if vals[i] >= thr > vals[i - 1]:
+                f = (thr - vals[i - 1]) / max(vals[i] - vals[i - 1], 1e-6)
+                rr = rs[i - 1] + f * (rs[i] - rs[i - 1])
+                pts.append((c0[0] + rr * dx, c0[1] + rr * dy))
+                break
+    if len(pts) < 12:
+        return (float(c0[0]), float(c0[1]), float(r0))
+    p = np.asarray(pts, np.float64)
+    # Kasa 圆拟合：最小化 Σ(x²+y² − 2cx·x − 2cy·y + c)² 的线性最小二乘形式
+    A = np.column_stack([2.0 * p[:, 0], 2.0 * p[:, 1], np.ones(len(p))])
+    b = np.einsum("ij,ij->i", p, p)
+    (D, E, F), *_ = np.linalg.lstsq(A, b, rcond=None)
+    cx, cy = D, E
+    return (float(cx), float(cy),
+            float(math.sqrt(max(F + cx * cx + cy * cy, 1.0))))
+
+
 def holes_branch(warped: np.ndarray, blobs: list) -> dict:
     """
-    霍夫圆检测 4 个螺栓孔（在矫正图的分度圆环带内搜索），
+    霍夫圆粗检 + 亚像素精修测量 4 个螺栓孔（矫正图分度圆环带内搜索），
     与基准孔位逐一匹配，输出：
       holes_found / hole_offsets_mm(4项,缺失记None) / hole_max_offset_mm /
       hole_max_dia_dev_mm / missing_idx / shifted_idx
+    测量链路：霍夫圆给粗位置 → _refine_circle 用径向剖面把圆心/半径修到
+    亚像素级 → 再与公差比较。直接用霍夫整数量化结果判定 ±0.5mm 孔位、
+    ±0.3mm 孔径公差时量化噪声即超差（批量验收实测为 OK 件误报主源）。
     blobs（基准比对分支结果）用于辅助确认"孔被填实"（真缺失 vs 霍夫漏检）。
     """
     rr = _grid_rr()
@@ -373,16 +460,19 @@ def holes_branch(warped: np.ndarray, blobs: list) -> dict:
         if best is not None and best_d <= HOLE_MATCH_WIN_PX:
             used[best] = True
             x, y, r = circles[best]
-            off_mm = best_d * config.MM_PER_PIXEL
-            dia_dev_mm = abs(2.0 * r - 2.0 * config.BOLT_HOLE_R_PX) * \
+            # 亚像素精修：匹配窗口判断用霍夫粗值即可，几何量必须精测
+            fx, fy, fr = _refine_circle(warped, (x, y), r)
+            off_px = math.hypot(fx - ex, fy - ey)
+            off_mm = off_px * config.MM_PER_PIXEL
+            dia_dev_mm = abs(2.0 * fr - 2.0 * config.BOLT_HOLE_R_PX) * \
                 config.MM_PER_PIXEL
             offsets_mm.append(round(off_mm, 3))
             max_off = max(max_off, off_mm)
             max_dia = max(max_dia, dia_dev_mm)
             if off_mm > config.HOLE_POS_TOL_MM:
                 shifted_idx.append(idx)
-            holes.append({"index": idx, "detected_px": (round(x, 1),
-                                                        round(y, 1)),
+            holes.append({"index": idx, "detected_px": (round(fx, 1),
+                                                        round(fy, 1)),
                           "offset_mm": round(off_mm, 3),
                           "dia_dev_mm": round(dia_dev_mm, 3)})
         else:
@@ -445,13 +535,22 @@ def inspect(img: np.ndarray, loc: dict = None) -> dict:
     warped, M = warp_to_canonical(gray, loc)
 
     # ---- 三分支检测 ----
-    # 顺序：几何测量先行——孔事件位置作为排除点传给基准比对分支，
-    # 防止"偏移孔回填blob"与路过的划痕碎片聚类合并后被整体跳过。
+    # 顺序：几何测量先行——孔事件位置作为排除点传给基准比对分支。
+    # 未判缺失/偏移的孔：其邻域碎片直接剔除。批量实测（run_batch 调参）
+    # 表明亚像素矫正残差会在孔边缘产生细长月牙状差分（质心集中在孔心
+    # ±10px），是 OK 件误报的主要来源；孔周边事件一律归几何分支管辖。
+    # 已判异常的孔不剔除：保留"回填/新孔"特征 blob，供填实佐证
+    # （filled_confirmed）与后续分类守卫使用。
     holes = holes_branch(warped, [])
     canon_holes = bolt_centers_canonical()
-    flagged_pts = [canon_holes[i] for i in
-                   set(holes["missing_idx"]) | set(holes["shifted_idx"])]
-    blobs = diff_branch(warped, flagged_pts)
+    flagged = set(holes["missing_idx"]) | set(holes["shifted_idx"])
+    # 未判缺失/偏移的孔：孔缘保护圈在比对掩膜上抠掉（源头抑制亚像素
+    # 矫正残差月牙——批量实测 OK 件误报主源）。已判异常的孔不抠：
+    # 保留"回填/新孔"特征 blob，供填实佐证（filled_confirmed）与
+    # 后续分类守卫使用。
+    hole_mask_pts = [canon_holes[i] for i in range(len(canon_holes))
+                     if i not in flagged]
+    blobs = diff_branch(warped, hole_mask_pts=hole_mask_pts)
     # 用基准比对结果回填"孔被填实"佐证（缺失判定的辅助信息）
     for h in holes["holes"]:
         if h["detected_px"] is None:
@@ -485,7 +584,7 @@ def inspect(img: np.ndarray, loc: dict = None) -> dict:
         if b["r_c"] > config.FLANGE_R_PX - 18.0 and b["area_px"] > 40:
             dtype = "chip"                 # 面域分支兜底识别的崩边残留
         elif (b["aspect"] >= config.CLASS_SCRATCH_ASPECT and
-              b["width_est"] <= 6.0):
+              b["width_est"] <= config.CLASS_SCRATCH_W_MAX_PX):
             dtype = "scratch"              # 细长（长宽比大且等效宽度≤6px）
         else:
             dtype = "stain"

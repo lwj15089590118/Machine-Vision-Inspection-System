@@ -40,6 +40,7 @@ plc_link/plc_server.py —— Modbus/TCP 从站（模拟 PLC）+ 视觉服务主
       远小于 2s 看门狗，永远不会自然超时）。
 """
 import argparse
+import asyncio
 import importlib.util as _iu
 import json
 import logging
@@ -56,7 +57,14 @@ import numpy as np
 import cv2
 
 import config
-from pymodbus.server import StartTcpServer
+# 注意：不要用 pymodbus.server.StartTcpServer —— 它内部是
+# asyncio.run(StartAsyncTcpServer(...))，会阻塞调用线程直到 shutdown，
+# 导致视觉服务主循环永远无法启动（症状：Modbus 端口可连、寄存器可读写，
+# 但触发无人消费、心跳不递增）。
+# 正确做法：专用线程内自建事件循环 → 构造 ModbusTcpServer（其构造器要求
+# 已有 running loop）→ await serve_forever()；停止时用
+# run_coroutine_threadsafe 调 shutdown() 协程。
+from pymodbus.server import ModbusTcpServer
 from pymodbus.datastore import (ModbusSequentialDataBlock, ModbusSlaveContext,
                                 ModbusServerContext)
 from simulator.synth import synth_frame
@@ -101,6 +109,8 @@ class VisionService:
         self._last_hb = time.perf_counter()   # 上次空闲心跳时刻
         self._stop = threading.Event()
         self._lock = threading.Lock()         # 保护 _faulted / 寄存器写
+        self._loop = None                     # Modbus 从站的 asyncio 事件循环
+        self._ready = threading.Event()       # 从站端口就绪信号
 
         # Modbus 数据存储：HR0~HR15 全 0 初始；zero_mode=True 使地址 0 即 HR0
         store = ModbusSlaveContext(
@@ -125,12 +135,42 @@ class VisionService:
 
     # ---------------- Modbus 从站线程 ----------------
     def start_server(self) -> None:
-        """启动 Modbus/TCP 从站（后台线程阻塞运行）"""
-        self.server = StartTcpServer(context=self.context,
-                                     address=(self.host, self.port))
-        threading.Thread(target=self.server.serve_forever,
-                         name="modbus-server", daemon=True).start()
-        print(f"[PLC-SIM] Modbus/TCP 从站已启动 {self.host}:{self.port}")
+        """
+        启动 Modbus/TCP 从站：在独立守护线程里自建 asyncio 事件循环并
+        运行 serve_forever（不阻塞调用方）。阻塞至端口就绪（≤5s）。
+        """
+        self._loop = asyncio.new_event_loop()
+        threading.Thread(target=self._serve, name="modbus-server",
+                         daemon=True).start()
+        if not self._ready.wait(timeout=5.0):
+            raise RuntimeError("Modbus 从站 5s 内未完成端口绑定")
+        print(f"[PLC-SIM] Modbus/TCP 从站已就绪 {self.host}:{self.port}")
+
+    def _serve(self) -> None:
+        """从站线程入口：建事件循环 → 构造服务器 → serve_forever"""
+        asyncio.set_event_loop(self._loop)
+        self._loop.run_until_complete(self._build_and_serve())
+
+    async def _build_and_serve(self) -> None:
+        """协程：构造服务器（需要 running loop）→ 监听 → 持续服务"""
+        self.server = ModbusTcpServer(context=self.context,
+                                      address=(self.host, self.port))
+        self._ready.set()                     # 构造完成即已绑定端口
+        await self.server.serve_forever()
+
+    def stop_server(self) -> None:
+        """跨线程调度 shutdown 协程，优雅关闭从站（幂等）"""
+        if self.server is None or self._loop is None:
+            return
+
+        async def _shutdown():
+            await self.server.shutdown()
+
+        try:
+            fut = asyncio.run_coroutine_threadsafe(_shutdown(), self._loop)
+            fut.result(timeout=3.0)
+        except Exception as e:                # 关闭失败不影响进程退出
+            print(f"[PLC-SIM] 从站关闭异常(忽略): {e!r}")
 
     # ---------------- 单次视觉处理（工作线程内执行） ----------------
     def _process_once(self, trigger_code: int) -> None:
@@ -304,11 +344,7 @@ class VisionService:
 
     def shutdown(self) -> None:
         self._stop.set()
-        if self.server is not None:
-            try:
-                self.server.shutdown()
-            except Exception:
-                pass
+        self.stop_server()
         print("[PLC-SIM] Modbus 从站已停止，进程退出")
 
 

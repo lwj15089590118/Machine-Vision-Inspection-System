@@ -277,7 +277,11 @@ def plan_defects(rng: np.random.Generator) -> list:
     types = list(rng.choice(all_types, size=n, replace=False))
 
     defects = []
-    first_bolt_idx = None                          # 避免两种孔缺陷打在同一个孔上
+    used_holes = set()                             # 已被孔缺陷占用的孔号
+    #   ↑ 避让规则对两种孔缺陷对称生效：旧实现只在 bolt_missing 分支
+    #   检查冲突，当 bolt_missing 先选孔、bolt_shift 后选时会打到同一
+    #   个孔上——"回填+新孔"的图像效果等价于纯偏移，真值却记两个缺陷，
+    #   造成检测对照失真（批量验收时表现为 bolt_missing 类型漏检假象）。
     for t in types:
         if t == "scratch":
             defects.append({"type": "scratch",
@@ -305,31 +309,28 @@ def plan_defects(rng: np.random.Generator) -> list:
                             "center": sc,
                             "blobs": blobs,
                             "depth": float(rng.uniform(40.0, 60.0))})
-        elif t == "bolt_shift":
+        elif t in ("bolt_shift", "bolt_missing"):
             idx = int(rng.integers(0, 4))
-            if first_bolt_idx is None:
-                first_bolt_idx = idx
-            # 偏移量 0.8~1.5mm（超过 ±0.5mm 公差），方向随机
-            mag_mm = rng.uniform(0.8, 1.5)
-            ang = rng.uniform(0.0, 2.0 * math.pi)
-            dx_px = mag_mm / config.MM_PER_PIXEL * math.cos(ang)
-            dy_px = mag_mm / config.MM_PER_PIXEL * math.sin(ang)
-            orig = bolt_centers_canonical()[idx]
-            defects.append({"type": "bolt_shift",
-                            "hole_index": idx,
-                            "orig": orig,
-                            "new": (orig[0] + dx_px, orig[1] + dy_px),
-                            "shift_mm": [mag_mm * math.cos(ang),
-                                         mag_mm * math.sin(ang)]})
-        elif t == "bolt_missing":
-            idx = int(rng.integers(0, 4))
-            if first_bolt_idx is None:
-                first_bolt_idx = idx
-            elif idx == first_bolt_idx:
-                idx = (idx + 2) % 4                # 错开已占用的孔
-            defects.append({"type": "bolt_missing",
-                            "hole_index": idx,
-                            "center": bolt_centers_canonical()[idx]})
+            while idx in used_holes:               # 已占用则换到对侧孔
+                idx = (idx + 2) % 4                # （0↔2、1↔3，最多两步）
+            used_holes.add(idx)
+            if t == "bolt_shift":
+                # 偏移量 0.8~1.5mm（超过 ±0.5mm 公差），方向随机
+                mag_mm = rng.uniform(0.8, 1.5)
+                ang = rng.uniform(0.0, 2.0 * math.pi)
+                dx_px = mag_mm / config.MM_PER_PIXEL * math.cos(ang)
+                dy_px = mag_mm / config.MM_PER_PIXEL * math.sin(ang)
+                orig = bolt_centers_canonical()[idx]
+                defects.append({"type": "bolt_shift",
+                                "hole_index": idx,
+                                "orig": orig,
+                                "new": (orig[0] + dx_px, orig[1] + dy_px),
+                                "shift_mm": [mag_mm * math.cos(ang),
+                                             mag_mm * math.sin(ang)]})
+            else:
+                defects.append({"type": "bolt_missing",
+                                "hole_index": idx,
+                                "center": bolt_centers_canonical()[idx]})
     return defects
 
 

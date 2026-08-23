@@ -1,0 +1,657 @@
+{
+  "meta": {
+    "generated_at": "2026-08-23 01:21:16",
+    "count": 500,
+    "defect_rate": 0.5,
+    "seed": 42,
+    "wall_time_s": 62.9,
+    "env": {
+      "python": "3.12.10",
+      "opencv": "5.0.0",
+      "numpy": "2.5.1",
+      "os": "Windows-11-10.0.26200-SP0"
+    }
+  },
+  "confusion": {
+    "tp": 241,
+    "fn": 0,
+    "fp": 0,
+    "tn": 259,
+    "ng_total": 241,
+    "ok_total": 259,
+    "locate_fail": 0
+  },
+  "recall_piece": 1.0,
+  "false_alarm": 0.0,
+  "precision": 1.0,
+  "type_rows": [
+    {
+      "type": "scratch",
+      "injected": 75,
+      "hit": 65,
+      "recall": 0.8667
+    },
+    {
+      "type": "chip",
+      "injected": 73,
+      "hit": 73,
+      "recall": 1.0
+    },
+    {
+      "type": "stain",
+      "injected": 71,
+      "hit": 56,
+      "recall": 0.7887
+    },
+    {
+      "type": "bolt_shift",
+      "injected": 65,
+      "hit": 63,
+      "recall": 0.9692
+    },
+    {
+      "type": "bolt_missing",
+      "injected": 73,
+      "hit": 72,
+      "recall": 0.9863
+    }
+  ],
+  "locate": {
+    "center_err_px": {
+      "mean": 0.1816,
+      "std": 0.0696,
+      "p95": 0.3315,
+      "max": 0.5101,
+      "n": 500
+    },
+    "center_err_mm": {
+      "mean": 0.0182,
+      "std": 0.007,
+      "p95": 0.0331,
+      "max": 0.051,
+      "n": 500
+    },
+    "angle_err_deg": {
+      "mean": -0.0196,
+      "std": 0.3993,
+      "p95": 0.4662,
+      "max": 6.5,
+      "n": 500
+    },
+    "scale_err_pct": {
+      "mean": 0.153,
+      "std": 0.1881,
+      "p95": 0.4166,
+      "max": 0.5371,
+      "n": 500
+    }
+  },
+  "takt_ms": {
+    "mean": 103.3,
+    "p95": 132.6,
+    "max": 159.3
+  },
+  "mismatches": [
+    {
+      "idx": 7,
+      "truth": [
+        "stain"
+      ],
+      "detected": [
+        "bolt_shift",
+        "stain"
+      ],
+      "missed": [],
+      "extra": [
+        "bolt_shift"
+      ],
+      "judged": "NG"
+    },
+    {
+      "idx": 11,
+      "truth": [
+        "stain",
+        "bolt_shift"
+      ],
+      "detected": [
+        "bolt_shift"
+      ],
+      "missed": [
+        "stain"
+      ],
+      "extra": [],
+      "judged": "NG"
+    },
+    {
+      "idx": 12,
+      "truth": [
+        "bolt_shift",
+        "scratch"
+      ],
+      "detected": [
+        "bolt_shift",
+        "stain"
+      ],
+      "missed": [
+        "scratch"
+      ],
+      "extra": [
+        "stain"
+      ],
+      "judged": "NG"
+    },
+    {
+      "idx": 28,
+      "truth": [
+        "bolt_shift",
+        "scratch"
+      ],
+      "detected": [
+        "bolt_shift",
+        "stain"
+      ],
+      "missed": [
+        "scratch"
+      ],
+      "extra": [
+        "stain"
+      ],
+      "judged": "NG"
+    },
+    {
+      "idx": 32,
+      "truth": [
+        "bolt_missing",
+        "stain"
+      ],
+      "detected": [
+        "bolt_shift"
+      ],
+      "missed": [
+        "bolt_missing",
+        "stain"
+      ],
+      "extra": [
+        "bolt_shift"
+      ],
+      "judged": "NG"
+    },
+    {
+      "idx": 38,
+      "truth": [
+        "OK"
+      ],
+      "detected": [
+        "scratch"
+      ],
+      "missed": [],
+      "extra": [
+        "scratch"
+      ],
+      "judged": "OK"
+    },
+    {
+      "idx": 56,
+      "truth": [
+        "stain",
+        "scratch"
+      ],
+      "detected": [
+        "stain"
+      ],
+      "missed": [
+        "scratch"
+      ],
+      "extra": [],
+      "judged": "NG"
+    },
+    {
+      "idx": 87,
+      "truth": [
+        "stain"
+      ],
+      "detected": [
+        "scratch"
+      ],
+      "missed": [
+        "stain"
+      ],
+      "extra": [
+        "scratch"
+      ],
+      "judged": "NG"
+    },
+    {
+      "idx": 92,
+      "truth": [
+        "scratch",
+        "bolt_shift"
+      ],
+      "detected": [
+        "bolt_shift"
+      ],
+      "missed": [
+        "scratch"
+      ],
+      "extra": [],
+      "judged": "NG"
+    },
+    {
+      "idx": 112,
+      "truth": [
+        "stain",
+        "bolt_shift"
+      ],
+      "detected": [
+        "bolt_shift"
+      ],
+      "missed": [
+        "stain"
+      ],
+      "extra": [],
+      "judged": "NG"
+    },
+    {
+      "idx": 114,
+      "truth": [
+        "stain",
+        "bolt_missing"
+      ],
+      "detected": [
+        "bolt_missing"
+      ],
+      "missed": [
+        "stain"
+      ],
+      "extra": [],
+      "judged": "NG"
+    },
+    {
+      "idx": 136,
+      "truth": [
+        "stain",
+        "bolt_missing"
+      ],
+      "detected": [
+        "bolt_missing"
+      ],
+      "missed": [
+        "stain"
+      ],
+      "extra": [],
+      "judged": "NG"
+    },
+    {
+      "idx": 140,
+      "truth": [
+        "stain",
+        "scratch"
+      ],
+      "detected": [
+        "bolt_shift",
+        "scratch"
+      ],
+      "missed": [
+        "stain"
+      ],
+      "extra": [
+        "bolt_shift"
+      ],
+      "judged": "NG"
+    },
+    {
+      "idx": 142,
+      "truth": [
+        "bolt_missing",
+        "scratch"
+      ],
+      "detected": [
+        "bolt_missing"
+      ],
+      "missed": [
+        "scratch"
+      ],
+      "extra": [],
+      "judged": "NG"
+    },
+    {
+      "idx": 144,
+      "truth": [
+        "chip"
+      ],
+      "detected": [
+        "chip",
+        "scratch"
+      ],
+      "missed": [],
+      "extra": [
+        "scratch"
+      ],
+      "judged": "NG"
+    },
+    {
+      "idx": 167,
+      "truth": [
+        "bolt_missing",
+        "scratch"
+      ],
+      "detected": [
+        "bolt_missing"
+      ],
+      "missed": [
+        "scratch"
+      ],
+      "extra": [],
+      "judged": "NG"
+    },
+    {
+      "idx": 185,
+      "truth": [
+        "OK"
+      ],
+      "detected": [
+        "scratch"
+      ],
+      "missed": [],
+      "extra": [
+        "scratch"
+      ],
+      "judged": "OK"
+    },
+    {
+      "idx": 190,
+      "truth": [
+        "chip",
+        "stain"
+      ],
+      "detected": [
+        "bolt_missing",
+        "chip"
+      ],
+      "missed": [
+        "stain"
+      ],
+      "extra": [
+        "bolt_missing"
+      ],
+      "judged": "NG"
+    },
+    {
+      "idx": 192,
+      "truth": [
+        "bolt_missing",
+        "stain"
+      ],
+      "detected": [
+        "bolt_missing"
+      ],
+      "missed": [
+        "stain"
+      ],
+      "extra": [],
+      "judged": "NG"
+    },
+    {
+      "idx": 202,
+      "truth": [
+        "scratch",
+        "bolt_shift"
+      ],
+      "detected": [
+        "bolt_missing",
+        "scratch"
+      ],
+      "missed": [
+        "bolt_shift"
+      ],
+      "extra": [
+        "bolt_missing"
+      ],
+      "judged": "NG"
+    },
+    {
+      "idx": 236,
+      "truth": [
+        "scratch",
+        "stain"
+      ],
+      "detected": [
+        "scratch"
+      ],
+      "missed": [
+        "stain"
+      ],
+      "extra": [],
+      "judged": "NG"
+    },
+    {
+      "idx": 261,
+      "truth": [
+        "bolt_shift",
+        "scratch"
+      ],
+      "detected": [
+        "bolt_shift",
+        "scratch",
+        "stain"
+      ],
+      "missed": [],
+      "extra": [
+        "stain"
+      ],
+      "judged": "NG"
+    },
+    {
+      "idx": 280,
+      "truth": [
+        "stain"
+      ],
+      "detected": [
+        "bolt_missing"
+      ],
+      "missed": [
+        "stain"
+      ],
+      "extra": [
+        "bolt_missing"
+      ],
+      "judged": "NG"
+    },
+    {
+      "idx": 293,
+      "truth": [
+        "bolt_shift",
+        "scratch"
+      ],
+      "detected": [
+        "bolt_shift"
+      ],
+      "missed": [
+        "scratch"
+      ],
+      "extra": [],
+      "judged": "NG"
+    },
+    {
+      "idx": 301,
+      "truth": [
+        "bolt_shift",
+        "stain"
+      ],
+      "detected": [
+        "bolt_shift",
+        "scratch",
+        "stain"
+      ],
+      "missed": [],
+      "extra": [
+        "scratch"
+      ],
+      "judged": "NG"
+    },
+    {
+      "idx": 313,
+      "truth": [
+        "scratch",
+        "bolt_shift"
+      ],
+      "detected": [
+        "bolt_missing",
+        "scratch"
+      ],
+      "missed": [
+        "bolt_shift"
+      ],
+      "extra": [
+        "bolt_missing"
+      ],
+      "judged": "NG"
+    },
+    {
+      "idx": 354,
+      "truth": [
+        "bolt_shift",
+        "scratch"
+      ],
+      "detected": [
+        "bolt_shift"
+      ],
+      "missed": [
+        "scratch"
+      ],
+      "extra": [],
+      "judged": "NG"
+    },
+    {
+      "idx": 358,
+      "truth": [
+        "stain",
+        "chip"
+      ],
+      "detected": [
+        "chip",
+        "scratch"
+      ],
+      "missed": [
+        "stain"
+      ],
+      "extra": [
+        "scratch"
+      ],
+      "judged": "NG"
+    },
+    {
+      "idx": 376,
+      "truth": [
+        "stain",
+        "scratch"
+      ],
+      "detected": [
+        "stain"
+      ],
+      "missed": [
+        "scratch"
+      ],
+      "extra": [],
+      "judged": "NG"
+    },
+    {
+      "idx": 387,
+      "truth": [
+        "stain",
+        "bolt_missing"
+      ],
+      "detected": [
+        "bolt_missing"
+      ],
+      "missed": [
+        "stain"
+      ],
+      "extra": [],
+      "judged": "NG"
+    },
+    {
+      "idx": 443,
+      "truth": [
+        "stain",
+        "scratch"
+      ],
+      "detected": [
+        "bolt_missing",
+        "scratch"
+      ],
+      "missed": [
+        "stain"
+      ],
+      "extra": [
+        "bolt_missing"
+      ],
+      "judged": "NG"
+    },
+    {
+      "idx": 462,
+      "truth": [
+        "bolt_shift",
+        "stain"
+      ],
+      "detected": [
+        "bolt_shift"
+      ],
+      "missed": [
+        "stain"
+      ],
+      "extra": [],
+      "judged": "NG"
+    },
+    {
+      "idx": 473,
+      "truth": [
+        "scratch",
+        "chip"
+      ],
+      "detected": [
+        "bolt_shift",
+        "chip"
+      ],
+      "missed": [
+        "scratch"
+      ],
+      "extra": [
+        "bolt_shift"
+      ],
+      "judged": "NG"
+    }
+  ],
+  "gates": [
+    {
+      "name": "件级缺陷检出率",
+      "target": "≥ 95%",
+      "actual": "100.00%",
+      "pass": true
+    },
+    {
+      "name": "误报率",
+      "target": "≤ 5%",
+      "actual": "0.00%",
+      "pass": true
+    },
+    {
+      "name": "定位中心误差 P95",
+      "target": "≤ 0.3 mm",
+      "actual": "0.033 mm",
+      "pass": true
+    },
+    {
+      "name": "定位角度误差 P95",
+      "target": "≤ 0.8°",
+      "actual": "0.466°",
+      "pass": true
+    },
+    {
+      "name": "平均单件节拍",
+      "target": "≤ 400 ms",
+      "actual": "103.3 ms",
+      "pass": true
+    }
+  ]
+}

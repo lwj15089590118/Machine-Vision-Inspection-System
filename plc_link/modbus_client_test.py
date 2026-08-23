@@ -71,9 +71,21 @@ def write_reg(client: ModbusTcpClient, addr: int, value: int) -> None:
 
 
 def wait_done(client: ModbusTcpClient, timeout_s: float = 6.0) -> int:
-    """轮询 HR1 直到 BUSY_DONE(2) 或超时；返回最后读到的 HR1"""
+    """
+    等待一次检测完整走完：先等服务端"受理"（HR1=BUSY_BUSY），
+    再等"完成"（HR1=BUSY_DONE）。返回最终 HR1 值。
+    受理等待必不可少：上一轮的 BUSY_DONE 会一直保持到下一次触发被
+    消费为止——若写完触发直接轮 DONE，会把上一轮残留状态误判为本轮
+    完成（读到的也是旧结果），属于典型的状态迁移同步错误。
+    """
     t0 = time.perf_counter()
-    while time.perf_counter() - t0 < timeout_s:
+    while time.perf_counter() - t0 < timeout_s:          # 阶段一：等受理
+        if read_reg(client, config.REG_BUSY) == config.BUSY_BUSY:
+            break
+        time.sleep(0.01)
+    else:
+        return read_reg(client, config.REG_BUSY)         # 未受理即超时
+    while time.perf_counter() - t0 < timeout_s:          # 阶段二：等完成
         if read_reg(client, config.REG_BUSY) == config.BUSY_DONE:
             return config.BUSY_DONE
         time.sleep(0.02)
@@ -168,12 +180,10 @@ def main() -> None:
         else:
             print("\n===== 4/5 看门狗验证：写 HR0=2 模拟处理卡死 =====")
             write_reg(client, config.REG_TRIGGER, 2)
-            # 等到超过看门狗时限（触发 2s 看门狗 + 模拟卡死 3.5s 释放线程）
             t0 = time.perf_counter()
-            while time.perf_counter() - t0 < config.WATCHDOG_TIMEOUT_S + 3.0:
-                if read_reg(client, config.REG_BUSY) == config.BUSY_DONE:
-                    break
-                time.sleep(0.05)
+            # 两段式等待：先受理再等完成。看门狗会在触发后约 2s 写入
+            # 故障码并置 BUSY_DONE；迟到的真实结果会被服务端作废。
+            state = wait_done(client, timeout_s=config.WATCHDOG_TIMEOUT_S + 4.0)
             fault_code = read_reg(client, config.REG_RESULT)
             report("看门狗写故障码 999",
                    fault_code == config.RESULT_FAULT,
