@@ -156,7 +156,10 @@ def plan_defects(rng: np.random.Generator) -> list:
                             "width": int(rng.integers(2, 4))})
         elif t == "chip":
             # 崩边：避开键槽方位 ±25°，防止与键槽特征混淆
-            a = rng.uniform(25.0, 335.0)
+            # （键槽方位单源自 config.KEYWAY_ANGLE_DEG，采样区间随之平移；
+            #   默认 0° 时区间即 (25, 335)，随机数消耗形状不变）
+            kw = config.KEYWAY_ANGLE_DEG
+            a = rng.uniform(kw + 25.0, kw + 335.0)
             cx, cy = config.CANON_CENTER
             rc = config.FLANGE_R_PX - 2.0
             defects.append({"type": "chip",

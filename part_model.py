@@ -113,22 +113,35 @@ def bolt_centers_canonical() -> list:
 
 
 def keyway_center_canonical() -> tuple:
-    """键槽中心在基准位姿下的坐标（用于真值输出与定位角度解算）"""
+    """键槽中心在基准位姿下的坐标（用于真值输出与定位角度解算）
+
+    方位由 config.KEYWAY_ANGLE_DEG 唯一决定（图像极角约定，
+    与 bolt_centers_canonical 同口径）；默认 0° 时位于正东 (cx+r_mid, cy)。
+    """
     cx, cy = config.CANON_CENTER
+    a = math.radians(config.KEYWAY_ANGLE_DEG)
     r_mid = config.FLANGE_R_PX - config.KEYWAY_D_PX / 2.0
-    return (cx + r_mid, cy)
+    return (cx + r_mid * math.cos(a), cy + r_mid * math.sin(a))
 
 
 def keyway_polygon() -> np.ndarray:
-    """键槽矩形四角（int32，供 fillPoly 挖空材料）"""
+    """键槽矩形四角（int32，供 fillPoly 挖空材料）
+
+    矩形沿键槽方位 config.KEYWAY_ANGLE_DEG 展开：u 轴=键槽朝向，
+    v 轴=垂直方向；方位为 0° 时与旧版逐位一致。
+    """
     cx, cy = config.CANON_CENTER
+    a = math.radians(config.KEYWAY_ANGLE_DEG)
+    ca, sa = math.cos(a), math.sin(a)
     r_out = config.FLANGE_R_PX + 3.0          # 键槽向外略越过外圆，保证挖穿
     r_in = config.FLANGE_R_PX - config.KEYWAY_D_PX
     hw = config.KEYWAY_W_PX / 2.0
-    return np.array([[cx + r_out, cy - hw],
-                     [cx + r_out, cy + hw],
-                     [cx + r_in, cy + hw],
-                     [cx + r_in, cy - hw]], np.int32)
+
+    def _pt(u: float, v: float) -> list:
+        return [cx + u * ca - v * sa, cy + u * sa + v * ca]
+
+    return np.array([_pt(r_out, -hw), _pt(r_out, hw),
+                     _pt(r_in, hw), _pt(r_in, -hw)], np.int32)
 
 
 def pose_matrix(cx: float, cy: float, angle_deg: float, scale: float) -> np.ndarray:

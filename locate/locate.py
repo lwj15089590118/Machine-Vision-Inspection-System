@@ -200,7 +200,10 @@ def angle_keyway_refine(gray: np.ndarray, center: tuple,
     1/6），对检测判定无实际影响，不再追加复杂度。崩边与键槽相距 ≥25°，
     不会入窗。异常（对比度不足/无超阈值 bin）时回退粗角度。
     """
-    phi_pred = math.radians(-theta_coarse)        # 预测键槽图像方位角
+    # 键槽基准方位单源自 config.KEYWAY_ANGLE_DEG（经 part_model 渲染进
+    # 基准图）；默认 0° 时以下两处换算与旧版逐位一致。
+    phi_c = math.radians(config.KEYWAY_ANGLE_DEG)
+    phi_pred = phi_c - math.radians(theta_coarse)  # 预测键槽图像方位角
     half_win = 22.0                               # 搜索窗口半宽（度）
     bin_deg = 0.5
     bins_deg = np.arange(-half_win, half_win + 1e-6, bin_deg)
@@ -245,7 +248,7 @@ def angle_keyway_refine(gray: np.ndarray, center: tuple,
         return theta_coarse
     delta = float(np.sum(weights * bins_deg) / weights.sum())
     psi = phi_pred + math.radians(delta)          # 键槽质心方位角
-    return -math.degrees(psi)                     # θ = -φ
+    return config.KEYWAY_ANGLE_DEG - math.degrees(psi)   # θ = φc − ψ
 
 
 # ================================================================

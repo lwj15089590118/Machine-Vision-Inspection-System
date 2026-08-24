@@ -353,8 +353,12 @@ def rim_branch(warped: np.ndarray) -> list:
 
 
 def _in_keyway_sector(bin_idx: int) -> bool:
-    """扇区是否落在键槽保护扇区（0°±RIM_KEYWAY_GUARD_DEG，含环绕）"""
-    a = (bin_idx - 0.0) % 360.0
+    """扇区是否落在键槽保护扇区（键槽方位±RIM_KEYWAY_GUARD_DEG，含环绕）
+
+    键槽方位单源自 config.KEYWAY_ANGLE_DEG（经 part_model 的图像极角
+    约定），默认 0° 时行为与旧版逐位一致。
+    """
+    a = (bin_idx - config.KEYWAY_ANGLE_DEG) % 360.0
     return a <= RIM_KEYWAY_GUARD_DEG or a >= 360.0 - RIM_KEYWAY_GUARD_DEG
 
 
