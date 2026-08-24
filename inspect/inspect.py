@@ -67,7 +67,7 @@ import cv2
 
 import config
 from locate.locate import locate, draw_result as draw_locate
-from simulator.synth import make_reference, pose_matrix, apply_affine, \
+from part_model import make_reference, pose_matrix, apply_affine, \
     bolt_centers_canonical
 
 # ---- 分支内部工程常数（公差类阈值在 config，此处为算法窗口/几何先验）----

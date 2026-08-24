@@ -23,8 +23,10 @@ simulator/synth.py —— 工件图像合成器（模拟工业相机俯拍画面
     data/images/frame_000001.png ...   合成画面
     data/truth/frame_000001.json ...   真值 JSON
 
-程序接口（供 locate / inspect / run_batch / plc_server 调用）：
-    from simulator.synth import synth_frame, make_reference, make_template
+程序接口（供 run_batch / plc_server 调用）：
+    from simulator.synth import synth_frame
+基准图/模板与工件几何改从工件基准模型获取（生产算法同此口径）：
+    from part_model import make_reference, make_template, bolt_centers_canonical
 """
 import argparse
 import json
@@ -41,16 +43,13 @@ if __package__ in (None, ""):
 
 import config
 
-# ----------------------------------------------------------------
-# 工件定义已迁至 part_model.py（工件基准模型：规范几何 / 名义外观 /
-# 黄金资产）。此处同名转发保持旧 import 路径 `from simulator.synth
-# import make_reference, ...` 兼容；待 locate/inspect 改为直接 import
-# part_model 后，本转发块将删除（过渡层）。
-# ----------------------------------------------------------------
+# 工件定义（规范几何 / 名义外观 / 黄金资产）已全部迁至 part_model.py，
+# 本模块 import 它做下游组合：叠加缺陷注入与随机化，合成测试帧。
+# 生产算法（locate/inspect）直接 import part_model，不经由本模块。
 from part_model import (bolt_centers_canonical, keyway_center_canonical,
                         keyway_polygon, pose_matrix, apply_affine,
                         face_ring_value, illumination_field, make_belt,
-                        build_part, make_reference, make_template)
+                        build_part)
 
 
 def _paint_face(part: np.ndarray, center: tuple, radius: float) -> None:

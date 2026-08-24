@@ -68,7 +68,7 @@ def _get_assets() -> tuple:
     """惰性生成并缓存：匹配模板、基准盘面小图、盘面掩膜、基准亮盘面半径"""
     global _TEMPLATE, _REF_SMALL, _REF_MASK, _REF_FACE_R
     if _TEMPLATE is None:
-        from simulator.synth import make_template, make_reference
+        from part_model import make_template, make_reference
         _TEMPLATE = make_template()
         ref, _ = make_reference()
         # 基准图自校准：同一套掩膜算法在基准图上测得的"亮盘面"半径
