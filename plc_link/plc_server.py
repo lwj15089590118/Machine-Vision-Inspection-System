@@ -263,14 +263,9 @@ class VisionService:
                                 self.write_reg(config.REG_BUSY,
                                                config.BUSY_DONE)
                             self.seq += 1
-                            rec = {"seq": self.seq,
-                                   "ts": datetime.now().strftime(
-                                       "%H:%M:%S.%f")[:-3],
-                                   "result": "FAULT",
-                                   "defect_types": ["watchdog"],
-                                   "fault": True,
-                                   "duration_ms":
-                                       config.WATCHDOG_TIMEOUT_S * 1000}
+                            rec = vp.build_record(
+                                self.seq, fault=True,
+                                duration_ms=config.WATCHDOG_TIMEOUT_S * 1000)
                             self._append_record(rec)
                             print(f"[WATCHDOG] #{self.seq} 处理超时"
                                   f"（>{config.WATCHDOG_TIMEOUT_S}s），"

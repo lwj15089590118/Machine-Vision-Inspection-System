@@ -124,7 +124,10 @@ def compute_stats(records: list) -> dict:
 
 
 def trim_record(r: dict) -> dict:
-    """裁剪记录字段（表格展示所需子集，缺字段补默认值）"""
+    """裁剪记录字段（表格展示所需子集）。
+    记录的字段契约由 vision_pipeline.build_record 唯一定义且满键同构
+    （FAULT 记录亦补齐全部键），此处的 .get 默认值仅作读侧兜底——
+    用于兼容历史 jsonl 文件，不再是契约的一部分。"""
     return {"seq": r.get("seq"), "ts": r.get("ts", ""),
             "result": r.get("result", "?"),
             "defect_types": r.get("defect_types") or [],
