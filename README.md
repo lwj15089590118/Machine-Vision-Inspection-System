@@ -178,6 +178,8 @@ python inspect/inspect.py --image data/images/frame_000002.png   # 有真值时�
   等概念的单一出处）
 - [docs/adr/0001-production-no-simulator-dep.md](docs/adr/0001-production-no-simulator-dep.md)：
   ADR-0001 生产算法不得依赖仿真器 —— 工件定义单源 part_model
+- [docs/架构改进路线.md](docs/架构改进路线.md)：重构方法学 + 候选台账
+  （回归工具 tools/metrics_diff.py 用法）
 - [docs/系统设计说明书.md](docs/系统设计说明书.md)：架构、算法选型理由、
   公差依据、调参复盘
 - [docs/测试报告.md](docs/测试报告.md)：run_batch 自动生成的完整验收报告
