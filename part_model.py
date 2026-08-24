@@ -23,6 +23,8 @@ part_model.py —— 工件基准模型（生产期唯一的"工件事实来源"
     holes = part_model.bolt_centers_canonical()   # 规范孔位
     ref, mask = part_model.make_reference()       # 黄金基准图
 """
+import hashlib
+import json
 import math
 import sys
 from pathlib import Path
@@ -232,8 +234,101 @@ def make_reference() -> tuple:
 
 
 def make_template() -> np.ndarray:
-    """从基准图裁出含 30px 余量的工件模板（用于 cv2.matchTemplate）"""
+    """
+    工件匹配模板（用于 cv2.matchTemplate）：基准图中心裁剪、含 30px 余量。
+
+    带落盘缓存：首次渲染后写入 config.TEMPLATE_PATH，并附带"几何+外观
+    参数指纹" sidecar（template.meta.json）。后续进程指纹一致则直接读盘
+    （PNG 无损，与现算逐像素相等）；任一影响模板像素的参数变化或文件
+    损坏 → 指纹不符/校验失败，自动重生成。资产渲染逻辑本身变更时，
+    手动递增 _ASSET_VERSION 使旧缓存失效。
+    """
+    fp = _template_fingerprint()
+    cached = _load_cached_template(fp)
+    if cached is not None:
+        return cached
+
     ref, _ = make_reference()
     cx, cy = int(config.CANON_CENTER[0]), int(config.CANON_CENTER[1])
     m = int(config.FLANGE_R_PX + 30)
-    return ref[cy - m:cy + m, cx - m:cx + m].copy()
+    tpl = ref[cy - m:cy + m, cx - m:cx + m].copy()
+    _save_cached_template(tpl, fp)
+    return tpl
+
+
+# ----------------------------------------------------------------
+# 模板落盘缓存（指纹 = 影响模板像素的全部 config 参数 + 资产版本号）
+# ----------------------------------------------------------------
+_ASSET_VERSION = "1"   # part_model 黄金资产渲染代码版本：改渲染逻辑须递增
+
+
+def _template_fingerprint() -> str:
+    """对影响模板像素的全部参数做 SHA256 短摘要（16 hex 字符）"""
+    payload = {
+        "version": _ASSET_VERSION,
+        "img": [config.IMG_W, config.IMG_H],
+        "canon_center": list(config.CANON_CENTER),
+        "geometry": {
+            "flange_r_px": config.FLANGE_R_PX,
+            "rim_ring_w": config.RIM_RING_W,
+            "center_hole_r_px": config.CENTER_HOLE_R_PX,
+            "bolt_hole_r_px": config.BOLT_HOLE_R_PX,
+            "bolt_pc_r_px": config.BOLT_PC_R_PX,
+            "bolt_angles_deg": list(config.BOLT_ANGLES_DEG),
+            "keyway_angle_deg": config.KEYWAY_ANGLE_DEG,
+            "keyway_w_px": config.KEYWAY_W_PX,
+            "keyway_d_px": config.KEYWAY_D_PX,
+        },
+        "appearance": {
+            "belt_base_gray": config.BELT_BASE_GRAY,
+            "face_base_gray": config.FACE_BASE_GRAY,
+            "rim_gray": config.RIM_GRAY,
+            "hole_gray": config.HOLE_GRAY,
+            "ring_amp": config.RING_AMP,
+            "ring_period_px": config.RING_PERIOD_PX,
+            "brushed_sigma": config.BRUSHED_SIGMA,
+        },
+    }
+    blob = json.dumps(payload, sort_keys=True, ensure_ascii=False)
+    return hashlib.sha256(blob.encode("utf-8")).hexdigest()[:16]
+
+
+def _meta_path():
+    """指纹 sidecar 路径：data/template.meta.json"""
+    return config.TEMPLATE_PATH.with_name(
+        config.TEMPLATE_PATH.stem + ".meta.json")
+
+
+def _load_cached_template(fingerprint: str):
+    """指纹一致且 PNG 可读、尺寸吻合时返回缓存模板；否则 None"""
+    meta, png = _meta_path(), config.TEMPLATE_PATH
+    if not (meta.exists() and png.exists()):
+        return None
+    try:
+        info = json.loads(meta.read_text(encoding="utf-8"))
+        if info.get("fingerprint") != fingerprint:
+            return None
+        tpl = cv2.imread(str(png), cv2.IMREAD_GRAYSCALE)
+        if tpl is None or tpl.dtype != np.uint8:
+            return None
+        m = int(config.FLANGE_R_PX + 30)
+        if tpl.shape != (2 * m, 2 * m):       # 尺寸与当前几何不符
+            return None
+        return tpl
+    except (OSError, ValueError, json.JSONDecodeError):
+        return None                            # 损坏/半写：按失效处理
+
+
+def _save_cached_template(tpl: np.ndarray, fingerprint: str) -> None:
+    """写入模板 PNG 与指纹 sidecar（失败不抛出：缓存只是加速）"""
+    try:
+        config.TEMPLATE_PATH.parent.mkdir(parents=True, exist_ok=True)
+        if not cv2.imwrite(str(config.TEMPLATE_PATH), tpl):
+            return
+        _meta_path().write_text(
+            json.dumps({"fingerprint": fingerprint,
+                        "asset_version": _ASSET_VERSION},
+                       ensure_ascii=False, indent=2),
+            encoding="utf-8")
+    except OSError as e:
+        print(f"[part_model] 模板缓存写入失败(不影响功能): {e!r}")

@@ -1,6 +1,6 @@
 {
   "meta": {
-    "generated_at": "2026-08-24 22:04:58",
+    "generated_at": "2026-08-24 22:10:17",
     "count": 100,
     "defect_rate": 0.5,
     "seed": 42,
@@ -87,9 +87,9 @@
     }
   },
   "takt_ms": {
-    "mean": 101.4,
-    "p95": 123.1,
-    "max": 159.4
+    "mean": 101.0,
+    "p95": 125.1,
+    "max": 133.1
   },
   "mismatches": [
     {
@@ -265,7 +265,7 @@
     {
       "name": "平均单件节拍",
       "target": "≤ 400 ms",
-      "actual": "101.4 ms",
+      "actual": "101.0 ms",
       "pass": true
     }
   ]

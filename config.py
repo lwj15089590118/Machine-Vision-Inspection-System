@@ -25,7 +25,7 @@ IMAGE_DIR     = DATA_DIR / "images"                      # 合成"相机画面"�
 TRUTH_DIR     = DATA_DIR / "truth"                       # 每张画面的真值 JSON
 ANNOT_DIR     = DATA_DIR / "annot"                       # 检测标注图输出
 CALIB_DIR     = DATA_DIR / "calib"                       # 相机标定结果
-TEMPLATE_PATH = DATA_DIR / "template.png"                # 定位模板（首次运行自动生成）
+TEMPLATE_PATH = DATA_DIR / "template.png"                # 定位模板缓存（part_model 首次生成后落盘，指纹不符自动重建）
 CALIB_JSON    = CALIB_DIR / "calibration.json"           # 标定结果 JSON
 
 
