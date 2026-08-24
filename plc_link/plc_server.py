@@ -68,7 +68,7 @@ from pymodbus.datastore import (ModbusSequentialDataBlock, ModbusSlaveContext,
                                 ModbusServerContext)
 from simulator.synth import synth_frame
 from locate.locate import locate
-import detect.detect as detector
+import vision_pipeline as vp
 
 # pymodbus 自身日志非常啰嗦，压到 WARNING
 logging.getLogger("pymodbus").setLevel(logging.WARNING)
@@ -172,20 +172,14 @@ class VisionService:
         # 1) 合成"相机画面"（按设定缺陷率注入缺陷）
         frame, truth = synth_frame(self.rng, with_defects=True,
                                    defect_rate=self.defect_rate)
-        # 2) 定位 + 检测（inspect 内部会先定位；定位失败按 NG 安全策略）
-        result = detector.inspect(frame)
+        # 2) 定位 + 检测（共享流水线；耗时为纯算法口径）
+        result, duration_ms = vp.inspect_frame(frame)
 
-        duration_ms = (time.perf_counter() - t_start) * 1000.0
         if faulted:
             return                             # 迟到的结果作废，不写寄存器
 
         # 3) 结果写回寄存器
-        defect_code = 0
-        for t in result["defect_types"]:
-            defect_code |= config.DEFECT_BIT.get(t, 0)
-        if not result["locate"].get("ok"):
-            defect_code |= config.DEFECT_BIT["locate_fail"]
-        defect_code &= 0xFFFF
+        defect_code = vp.defect_code_of(result)
         with self._lock:
             self.write_reg(config.REG_RESULT,
                            config.RESULT_OK if result["result"] == "OK"
@@ -207,18 +201,10 @@ class VisionService:
 
         # 4) 落盘记录 + 最新标注帧（供 dashboard）
         self.seq += 1
-        rec = {"seq": self.seq,
-               "ts": datetime.now().strftime("%H:%M:%S.%f")[:-3],
-               "result": result["result"],
-               "defect_types": result["defect_types"],
-               "defect_code": defect_code,
-               "center_mm": result["locate"].get("center_mm"),
-               "angle_deg": result["locate"].get("angle_deg"),
-               "hole_max_offset_mm": result["hole_max_offset_mm"],
-               "confidence": result["confidence"],
-               "duration_ms": round(duration_ms, 1),
-               "truth_defects": [d["type"] for d in truth["defects"]],
-               "fault": False}
+        rec = vp.build_record(self.seq, result,
+                              duration_ms=duration_ms,
+                              truth_types=[d["type"] for d in
+                                           truth["defects"]])
         self._append_record(rec)
         self._save_latest(frame, result)
         print(f"[VISION] #{self.seq} {result['result']} "
@@ -231,21 +217,8 @@ class VisionService:
             f.write(json.dumps(rec, ensure_ascii=False) + "\n")
 
     def _save_latest(self, frame: np.ndarray, result: dict) -> None:
-        """保存最新标注帧与结果 JSON（dashboard 展示用）"""
-        try:
-            png = config.ANNOT_DIR / "latest.png"
-            cv2.imwrite(str(png),
-                        detector.draw_defects(frame, result["locate"],
-                                              result))
-            (config.ANNOT_DIR / "latest.json").write_text(
-                json.dumps({**{k: v for k, v in result.items()
-                               if k != "locate"},
-                            "locate": {k: v for k, v in
-                                       result["locate"].items()}},
-                           ensure_ascii=False, default=str),
-                encoding="utf-8")
-        except Exception as e:                 # 展示失败不影响主流程
-            print(f"[VISION] 保存最新帧失败(不影响检测): {e}")
+        """保存最新标注帧与结果 JSON（dashboard 展示用；委托共享流水线）"""
+        vp.save_latest_assets(frame, result)
 
     # ---------------- 视觉服务主循环 ----------------
     def run(self) -> None:

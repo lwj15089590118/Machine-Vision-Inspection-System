@@ -42,6 +42,7 @@ import cv2
 
 import config
 import detect.detect as detector
+import vision_pipeline as vp
 from simulator.synth import synth_frame
 
 
@@ -120,11 +121,9 @@ def run_batch(count: int, defect_rate: float, seed: int,
         frame, truth = synth_frame(rng, with_defects=True,
                                    defect_rate=defect_rate)
 
-        # ---- 2) 全链路检测（内部含定位），外部计时作为单件节拍 ----
-        t0 = time.perf_counter()
-        result = detector.inspect(frame)
-        takt_ms = (time.perf_counter() - t0) * 1000.0
-        takts.append(round(takt_ms, 1))
+        # ---- 2) 全链路检测（内部含定位），纯算法耗时作为单件节拍 ----
+        result, takt_ms = vp.inspect_frame(frame)
+        takts.append(takt_ms)
 
         # ---- 3) 件级判定对照（混淆矩阵）----
         t_ng = bool(truth["is_ng"])
