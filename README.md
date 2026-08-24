@@ -15,17 +15,27 @@
 
 ```mermaid
 flowchart LR
-    SYNTH["simulator/synth.py<br/>工件图像合成器"] -->|800x600灰度帧| LOC["locate/locate.py<br/>模板匹配粗定位<br/>→质心精修→键槽角度"]
-    LOC --> INSP["inspect/inspect.py<br/>三分支缺陷检测+NG判定"]
-    INSP --> PLCV["plc_link/plc_server.py<br/>视觉服务主循环"]
+    PM["part_model.py<br/>工件基准模型：规范几何<br/>名义外观 · 黄金资产(基准图/模板)"]
+    SYNTH["simulator/synth.py<br/>工件图像合成器<br/>(组合 part_model，叠加缺陷/随机化)"] --> PM
+    LOC["locate/locate.py<br/>模板匹配粗定位<br/>→质心精修→键槽角度"] --> PM
+    INSP["inspect/inspect.py<br/>三分支缺陷检测+NG判定"] --> PM
+    INSP -->|"内部先定位"| LOC
+    SYNTH -->|"800x600灰度帧"| RUNB["run_batch.py<br/>批量验收 → docs/测试报告.md"]
+    SYNTH -->|"模拟相机画面"| PLCV["plc_link/plc_server.py<br/>视觉服务主循环"]
     PLCV <-->|"HR0~HR10"| HMI["上位机/PLC(模拟)<br/>modbus_client_test.py"]
     PLCV -->|"records.jsonl / latest.png"| DASH["dashboard/app.py"]
     DASH --> WEB["templates/index.html<br/>Flask+ECharts 看板"]
     CALIB["calib/calibrate.py<br/>相机标定(独立模块)"] -.->|px↔mm| LOC
 ```
 
+> 依赖方向约定（ADR-0001）：**locate / inspect 只从 `part_model` 获取
+> 工件几何与黄金资产，不 import 仿真器**；synth 是 part_model 的下游
+> 组合者，仅作为"模拟相机"向批量验收与 PLC 循环供帧。
+
 ## 功能特性
 
+- **工件基准模型**：规范几何 / 名义外观 / 黄金资产单源 `part_model.py`，
+  生产算法零依赖仿真器（ADR-0001）；匹配模板落盘缓存 + 参数指纹自愈；
 - **合成器**：图层成像链路仿真（仿射位姿 ±100px/±30°/0.9~1.1 倍、亮度
   ±20%、高斯噪声），5 类缺陷注入 + 同帧解析真值 JSON，`--seed` 可复现；
 - **标定**：正向畸变仿真棋盘格 → `calibrateCamera` → 重投影误差验收
@@ -64,6 +74,9 @@ python simulator/synth.py --count 20 --defects --seed 42
 
 :: 3) 批量验收：500 帧 → 检出率/误报率/混淆矩阵/节拍 → docs/测试报告.md
 python run_batch.py --save-annot 6
+
+:: 3.5) 单元测试（标准库 unittest，无需安装依赖）：
+python -m unittest discover -s tests
 
 :: 4) PLC 链路联调（两个终端）
 :: 终端 A：
@@ -134,8 +147,9 @@ python inspect/inspect.py --image data/images/frame_000002.png   # 有真值时�
 
 ```
 ├── config.py                  全局参数唯一入口（调参只改这里）
+├── part_model.py              工件基准模型：规范几何/名义外观/黄金资产
 ├── run_batch.py               批量验收 → docs/测试报告.md
-├── simulator/synth.py         图像合成器 + 真值
+├── simulator/synth.py         图像合成器 + 真值（组合 part_model，叠加缺陷注入）
 ├── calib/calibrate.py         相机标定 + 像素当量
 ├── locate/locate.py           三级定位流水线
 ├── inspect/inspect.py         三分支缺陷检测 + NG 判定
@@ -143,7 +157,8 @@ python inspect/inspect.py --image data/images/frame_000002.png   # 有真值时�
 ├── plc_link/modbus_client_test.py  上位机视角端到端自测
 ├── dashboard/app.py           Flask 看板后端
 ├── dashboard/templates/index.html  ECharts 看板页面
-└── docs/                      设计说明书 / 测试报告 / 验收清单
+├── tests/test_part_model.py   工件基准模型单元测试（unittest）
+└── docs/                      设计说明书 / 测试报告 / 验收清单 / ADR
 ```
 
 ## 常见问题
@@ -159,6 +174,10 @@ python inspect/inspect.py --image data/images/frame_000002.png   # 有真值时�
 
 ## 文档
 
+- [CONTEXT.md](CONTEXT.md)：领域术语表（工件基准模型/黄金资产/规范位姿
+  等概念的单一出处）
+- [docs/adr/0001-production-no-simulator-dep.md](docs/adr/0001-production-no-simulator-dep.md)：
+  ADR-0001 生产算法不得依赖仿真器 —— 工件定义单源 part_model
 - [docs/系统设计说明书.md](docs/系统设计说明书.md)：架构、算法选型理由、
   公差依据、调参复盘
 - [docs/测试报告.md](docs/测试报告.md)：run_batch 自动生成的完整验收报告
