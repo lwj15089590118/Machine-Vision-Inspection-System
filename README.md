@@ -18,7 +18,7 @@ flowchart LR
     PM["part_model.py<br/>工件基准模型：规范几何<br/>名义外观 · 黄金资产(基准图/模板)"]
     SYNTH["simulator/synth.py<br/>工件图像合成器<br/>(组合 part_model，叠加缺陷/随机化)"] --> PM
     LOC["locate/locate.py<br/>模板匹配粗定位<br/>→质心精修→键槽角度"] --> PM
-    INSP["inspect/inspect.py<br/>三分支缺陷检测+NG判定"] --> PM
+    INSP["detect/detect.py<br/>三分支缺陷检测+NG判定"] --> PM
     INSP -->|"内部先定位"| LOC
     SYNTH -->|"800x600灰度帧"| RUNB["run_batch.py<br/>批量验收 → docs/测试报告.md"]
     SYNTH -->|"模拟相机画面"| PLCV["plc_link/plc_server.py<br/>视觉服务主循环"]
@@ -93,7 +93,7 @@ python dashboard/app.py
 
 ```powershell
 python locate/locate.py --image data/images/frame_000001.png --truth-dir data/truth
-python inspect/inspect.py --image data/images/frame_000002.png   # 有真值时自动对照
+python detect/detect.py --image data/images/frame_000002.png   # 有真值时自动对照
 ```
 
 ## 性能指标（全部为仿真验证值）
@@ -152,7 +152,7 @@ python inspect/inspect.py --image data/images/frame_000002.png   # 有真值时�
 ├── simulator/synth.py         图像合成器 + 真值（组合 part_model，叠加缺陷注入）
 ├── calib/calibrate.py         相机标定 + 像素当量
 ├── locate/locate.py           三级定位流水线
-├── inspect/inspect.py         三分支缺陷检测 + NG 判定
+├── detect/detect.py           三分支缺陷检测 + NG 判定
 ├── plc_link/plc_server.py     Modbus 从站 + 视觉主循环 + 看门狗
 ├── plc_link/modbus_client_test.py  上位机视角端到端自测
 ├── dashboard/app.py           Flask 看板后端

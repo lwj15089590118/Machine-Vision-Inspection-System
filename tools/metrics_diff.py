@@ -26,7 +26,9 @@ import argparse
 import json
 import sys
 
-VOLATILE_KEYS = {"takt_ms"}          # 整段剔除：纯墙钟计时
+VOLATILE_KEYS = {"takt_ms",          # 整段剔除：纯墙钟计时
+                 "generated_at",     # 报告生成时刻（每次必不同）
+                 "wall_time_s"}      # 总耗时（墙钟）
 GATE_VOLATILE_KEYS = {"actual"}      # 门槛行里嵌着节拍实测字符串
 
 

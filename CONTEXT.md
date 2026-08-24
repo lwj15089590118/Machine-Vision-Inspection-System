@@ -24,7 +24,7 @@
 |---|---|---|---|
 | 黄金资产 | golden assets | 基准图 `make_reference()`（标准工位成像的无缺陷画面）与匹配模板 `make_template()`（基准图裁剪，落盘缓存+指纹）。locate 的模板来源、inspect 的比对参照。 | `part_model.py` |
 | 三级定位流水线 | locate pipeline | 模板匹配粗定位 → 凸包质心精修（中心/缩放）→ 键槽剖面精修角度。 | `locate/locate.py` |
-| 三分支检测 | three-branch inspection | 基准比对分支（划痕/污渍）+ 外圆轮廓分支（崩边）+ 几何测量分支（孔偏移/孔缺失）。 | `inspect/inspect.py` |
+| 三分支检测 | three-branch inspection | 基准比对分支（划痕/污渍）+ 外圆轮廓分支（崩边）+ 几何测量分支（孔偏移/孔缺失）。 | `detect/detect.py` |
 | NG 判定 | NG judgement | 规则表判定：缺陷面积超限 / 崩边内凹 / 孔位超差 / 孔缺失 / 定位失败（安全策略按 NG）。 | `config.py §五` |
 | 缺陷类型 | defect types | 五类：`scratch` 划痕 · `chip` 崩边 · `stain` 污渍 · `bolt_shift` 孔偏移 · `bolt_missing` 孔缺失；另有协议位 `locate_fail` 定位失败。 | 注入:`synth` 检出:`inspect` |
 | 像素当量 | mm-per-pixel | 像素↔毫米换算系数（仿真设定 0.1mm/px）。⚠ 双口径现状见设计说明书 §9：标定复检值与 config 设定值并存。 | `calib` / `config` |

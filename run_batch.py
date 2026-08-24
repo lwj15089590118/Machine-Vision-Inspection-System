@@ -28,7 +28,6 @@ run_batch.py —— 批量测试与验收脚本（项目总验收入口）
     from run_batch import run_batch        # 供其他脚本复用批量验收
 """
 import argparse
-import importlib.util as _iu
 import json
 import math
 import platform
@@ -42,23 +41,8 @@ import numpy as np
 import cv2
 
 import config
+import detect.detect as detector
 from simulator.synth import synth_frame
-
-# ----------------------------------------------------------------
-# 加载 inspect 检测模块（目录名与标准库 inspect 同名，
-# 常规 import 会让位于标准库，统一用 importlib 以别名加载，
-# 做法 plc_link/plc_server.py 完全一致）
-# ----------------------------------------------------------------
-def load_vision_inspect():
-    root = Path(__file__).resolve().parent
-    if "vision_inspect" in sys.modules:
-        return sys.modules["vision_inspect"]
-    spec = _iu.spec_from_file_location("vision_inspect",
-                                       root / "inspect" / "inspect.py")
-    mod = _iu.module_from_spec(spec)
-    sys.modules["vision_inspect"] = mod
-    spec.loader.exec_module(mod)
-    return mod
 
 
 # ================================================================
@@ -114,7 +98,6 @@ def run_batch(count: int, defect_rate: float, seed: int,
     config.ensure_dirs()
     docs_dir = config.PROJECT_ROOT / "docs"
     docs_dir.mkdir(exist_ok=True)
-    vi = load_vision_inspect()
     rng = np.random.default_rng(seed)
 
     # ---- 累加器 ----
@@ -139,7 +122,7 @@ def run_batch(count: int, defect_rate: float, seed: int,
 
         # ---- 2) 全链路检测（内部含定位），外部计时作为单件节拍 ----
         t0 = time.perf_counter()
-        result = vi.inspect(frame)
+        result = detector.inspect(frame)
         takt_ms = (time.perf_counter() - t0) * 1000.0
         takts.append(round(takt_ms, 1))
 
@@ -191,7 +174,7 @@ def run_batch(count: int, defect_rate: float, seed: int,
         want_sample = annot_saved < save_annot
         want_err = ((missed or (not t_ng and r_ng)) and err_saved < 8)
         if want_sample or want_err:
-            vis = vi.draw_defects(frame, loc, result)
+            vis = detector.draw_defects(frame, loc, result)
             if want_err:
                 tag = "batch_miss" if (t_ng and not r_ng) else \
                       ("batch_fp" if (not t_ng and r_ng) else "batch_type")

@@ -1,6 +1,6 @@
 # -*- coding: utf-8 -*-
 """
-inspect/inspect.py —— 缺陷检测与 NG 判定模块（系统核心）
+detect/detect.py —— 缺陷检测与 NG 判定模块（系统核心）
 ================================================================
 职责：
     输入一帧灰度"相机画面"，先定位（locate 模块），再用三个互补的
@@ -36,11 +36,11 @@ NG 判定规则表（config 中集中定义）：
     hole_max_dia_dev_mm / confidence / duration_ms / locate
 
 命令行用法：
-    python inspect/inspect.py --image data/images/frame_000001.png
+    python detect/detect.py --image data/images/frame_000001.png
         （若 data/truth 下有同名真值 JSON，自动附带真值对照）
 
 程序接口：
-    from inspect.inspect import inspect, draw_defects
+    from detect.detect import inspect, draw_defects
 """
 import argparse
 import json
@@ -49,16 +49,7 @@ import sys
 import time
 from pathlib import Path
 
-# ★ 重要：本模块目录名 inspect 与 Python 标准库 inspect 同名。
-#   直接运行 `python inspect/inspect.py` 时，脚本所在目录会被放到
-#   sys.path 首位，第三方库（numpy 等）内部的 `import inspect` 将误
-#   导入本文件造成循环导入——必须在导入 numpy/cv2 之前把脚本目录从
-#   sys.path 中移除（作为包导入时命名空间包会让位于标准库，不受影响）。
-_HERE = str(Path(__file__).resolve().parent)
-while _HERE in sys.path:
-    sys.path.remove(_HERE)
-
-# 允许直接 `python inspect/inspect.py` 运行：把项目根目录加入 sys.path
+# 允许直接 `python detect/detect.py` 运行：把项目根目录加入 sys.path
 if __package__ in (None, ""):
     sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 

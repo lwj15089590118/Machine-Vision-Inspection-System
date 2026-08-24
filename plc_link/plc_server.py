@@ -41,7 +41,6 @@ plc_link/plc_server.py —— Modbus/TCP 从站（模拟 PLC）+ 视觉服务主
 """
 import argparse
 import asyncio
-import importlib.util as _iu
 import json
 import logging
 import sys
@@ -69,26 +68,10 @@ from pymodbus.datastore import (ModbusSequentialDataBlock, ModbusSlaveContext,
                                 ModbusServerContext)
 from simulator.synth import synth_frame
 from locate.locate import locate
+import detect.detect as detector
 
 # pymodbus 自身日志非常啰嗦，压到 WARNING
 logging.getLogger("pymodbus").setLevel(logging.WARNING)
-
-
-# ----------------------------------------------------------------
-# 加载 inspect 检测模块（目录名与标准库 inspect 同名，
-# numpy 已先加载标准库 inspect，`from inspect.inspect import ...` 不可用，
-# 统一用 importlib 以别名 vision_inspect 从文件路径加载）
-# ----------------------------------------------------------------
-def load_vision_inspect():
-    root = Path(__file__).resolve().parents[1]
-    if "vision_inspect" in sys.modules:
-        return sys.modules["vision_inspect"]
-    spec = _iu.spec_from_file_location("vision_inspect",
-                                       root / "inspect" / "inspect.py")
-    mod = _iu.module_from_spec(spec)
-    sys.modules["vision_inspect"] = mod
-    spec.loader.exec_module(mod)
-    return mod
 
 
 N_REGS = 16                      # 寄存器区长度（HR0~HR15，预留扩展）
@@ -190,7 +173,7 @@ class VisionService:
         frame, truth = synth_frame(self.rng, with_defects=True,
                                    defect_rate=self.defect_rate)
         # 2) 定位 + 检测（inspect 内部会先定位；定位失败按 NG 安全策略）
-        result = load_vision_inspect().inspect(frame)
+        result = detector.inspect(frame)
 
         duration_ms = (time.perf_counter() - t_start) * 1000.0
         if faulted:
@@ -250,10 +233,10 @@ class VisionService:
     def _save_latest(self, frame: np.ndarray, result: dict) -> None:
         """保存最新标注帧与结果 JSON（dashboard 展示用）"""
         try:
-            vis = load_vision_inspect()
             png = config.ANNOT_DIR / "latest.png"
-            cv2.imwrite(str(png), vis.draw_defects(frame, result["locate"],
-                                                   result))
+            cv2.imwrite(str(png),
+                        detector.draw_defects(frame, result["locate"],
+                                              result))
             (config.ANNOT_DIR / "latest.json").write_text(
                 json.dumps({**{k: v for k, v in result.items()
                                if k != "locate"},
