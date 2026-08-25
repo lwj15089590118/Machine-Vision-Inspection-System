@@ -166,7 +166,12 @@ def angle_coarse(gray: np.ndarray, center: tuple, radius: float) -> tuple:
     sc = (w / 2.0, h / 2.0)                       # 旋转中心=小图中心
 
     best_a, best_score = 0.0, -2.0
-    for a_deg in range(-46, 47, 2):
+    # 扫描范围由 config 派生：合成器位姿抖动 ±ANGLE_JITTER_DEG，粗扫
+    # 再各留 ±16° 余量（覆盖模板匹配自身的角度误差）；步进 2°。
+    # 改大仿真抖动只需改 config，此处自动跟随（旧实现硬编码 -46~46）。
+    a_lo = -int(config.ANGLE_JITTER_DEG) - 16
+    a_hi = int(config.ANGLE_JITTER_DEG) + 16
+    for a_deg in range(a_lo, a_hi + 1, 2):
         M = cv2.getRotationMatrix2D(sc, float(a_deg), 1.0)
         rot = cv2.warpAffine(roi_small, M, (w, h))
         if rot.shape != ref_small.shape:          # 统一到基准小图尺寸
