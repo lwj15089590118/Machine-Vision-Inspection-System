@@ -121,7 +121,7 @@ MODBUS_PORT = 502
 REG_TRIGGER   = 0    # HR0 : 触发命令（上位机写 1 触发一次检测，视觉端处理后自动清零）
 REG_BUSY      = 1    # HR1 : 忙闲状态 0=空闲 1=忙 2=完成（本次结果有效）
 REG_RESULT    = 2    # HR2 : 检测结果码 0=无 1=OK 2=NG 999=看门狗故障
-REG_DEFECT    = 3    # HR3 : 缺陷类型码（位组合：bit0划痕 bit1崩边 bit2污渍 bit3孔偏移 bit4孔缺失）
+REG_DEFECT    = 3    # HR3 : 缺陷类型码（位组合，位号见下方 DEFECT_TYPES 注册表）
 REG_DEV_X     = 4    # HR4 : X 定位偏差，0.01mm 单位，有符号
 REG_DEV_Y     = 5    # HR5 : Y 定位偏差，0.01mm 单位，有符号
 REG_ANGLE     = 6    # HR6 : 工件角度，0.1° 单位，有符号
@@ -129,9 +129,41 @@ REG_HEARTBEAT = 10   # HR10: 心跳计数（视觉端每处理一轮 +1）
 
 BUSY_IDLE, BUSY_BUSY, BUSY_DONE = 0, 1, 2
 RESULT_NONE, RESULT_OK, RESULT_NG, RESULT_FAULT = 0, 1, 2, 999
-DEFECT_BIT = {"scratch": 1 << 0, "chip": 1 << 1, "stain": 1 << 2,
-              "bolt_shift": 1 << 3, "bolt_missing": 1 << 4,
-              "locate_fail": 1 << 5}
+
+# ----------------------------------------------------------------
+# 缺陷类型注册表（唯一出处）
+# ----------------------------------------------------------------
+# 新增一种缺陷只改这张表：位号自动进 HR3 位组合、中文名自动进测试报告
+# 与看板图例、可注入类型自动进合成器与批量验收统计、面域类缺陷自动进
+# 「面积超阈值」NG 规则。字段含义：
+#   name       程序内类型名（记录/接口/寄存器编码都用它）
+#   cn         中文名（报告与看板展示）
+#   bit        HR3 缺陷码位号（0~15，不可与已有重复）
+#   area_blob  是否属于"基准比对连通域"类缺陷（受面积阈值 NG 规则约束）
+#   injectable 合成器是否可注入（locate_fail 是链路状态，不可注入）
+DEFECT_TYPES = (
+    {"name": "scratch",      "cn": "划痕",     "bit": 0,
+     "area_blob": True,  "injectable": True},
+    {"name": "chip",         "cn": "崩边",     "bit": 1,
+     "area_blob": True,  "injectable": True},
+    {"name": "stain",        "cn": "污渍",     "bit": 2,
+     "area_blob": True,  "injectable": True},
+    {"name": "bolt_shift",   "cn": "孔偏移",   "bit": 3,
+     "area_blob": False, "injectable": True},
+    {"name": "bolt_missing", "cn": "孔缺失",   "bit": 4,
+     "area_blob": False, "injectable": True},
+    {"name": "locate_fail",  "cn": "定位失败", "bit": 5,
+     "area_blob": False, "injectable": False},
+)
+
+DEFECT_BIT = {d["name"]: 1 << d["bit"] for d in DEFECT_TYPES}
+DEFECT_CN = {d["name"]: d["cn"] for d in DEFECT_TYPES}
+INJECTABLE_TYPES = tuple(d["name"] for d in DEFECT_TYPES if d["injectable"])
+AREA_BLOB_TYPES = tuple(d["name"] for d in DEFECT_TYPES if d["area_blob"])
+
+assert len({d["bit"] for d in DEFECT_TYPES}) == len(DEFECT_TYPES), \
+    "DEFECT_TYPES 的 bit 位号不可重复"
+
 WATCHDOG_TIMEOUT_S = 2.0    # 看门狗：触发后超过该时长未完成 → 写故障码
 HEARTBEAT_PERIOD_S = 1.0    # 空闲时心跳递增周期（秒）
 

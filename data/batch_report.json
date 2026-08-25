@@ -1,10 +1,10 @@
 {
   "meta": {
-    "generated_at": "2026-08-24 23:14:36",
+    "generated_at": "2026-08-25 00:29:35",
     "count": 100,
     "defect_rate": 0.5,
     "seed": 42,
-    "wall_time_s": 14.2,
+    "wall_time_s": 15.8,
     "env": {
       "python": "3.12.10",
       "opencv": "5.0.0",
@@ -87,9 +87,9 @@
     }
   },
   "takt_ms": {
-    "mean": 117.9,
-    "p95": 141.9,
-    "max": 150.3
+    "mean": 130.8,
+    "p95": 160.5,
+    "max": 182.3
   },
   "mismatches": [
     {
@@ -265,7 +265,7 @@
     {
       "name": "平均单件节拍",
       "target": "≤ 400 ms",
-      "actual": "117.9 ms",
+      "actual": "130.8 ms",
       "pass": true
     }
   ]

@@ -205,7 +205,7 @@ def run_batch(count: int, defect_rate: float, seed: int,
     precision = round(tp / (tp + fp), 4) if (tp + fp) else None
 
     type_rows = []
-    for ty in ("scratch", "chip", "stain", "bolt_shift", "bolt_missing"):
+    for ty in config.INJECTABLE_TYPES:              # 注册表派生（顺序即注册序）
         n_t = type_total.get(ty, 0)
         n_h = type_hit.get(ty, 0)
         type_rows.append({
@@ -348,12 +348,10 @@ def write_markdown_report(s: dict, path: Path) -> None:
     L.append("## 3. 分缺陷类型检出率\n")
     L.append("| 缺陷类型 | 注入数 | 类型命中数 | 检出率（仿真验证值）|")
     L.append("|---|---|---|---|")
-    name_cn = {"scratch": "划痕 scratch", "chip": "崩边 chip",
-               "stain": "污渍 stain", "bolt_shift": "孔偏移 bolt_shift",
-               "bolt_missing": "孔缺失 bolt_missing"}
     for row in s["type_rows"]:
         if row["injected"]:
-            L.append(f"| {name_cn[row['type']]} | {row['injected']} | "
+            L.append(f"| {config.DEFECT_CN[row['type']]} {row['type']} | "
+                     f"{row['injected']} | "
                      f"{row['hit']} | {row['recall']:.1%} |")
     L.append("\n> 口径说明：\"类型命中\"指该帧检出类型列表中包含注入的类型名；"
              "一件注入多种缺陷时按类型分别计数。\n")

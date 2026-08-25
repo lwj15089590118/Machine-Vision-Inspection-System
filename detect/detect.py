@@ -627,7 +627,7 @@ def inspect(img: np.ndarray, loc: dict = None) -> dict:
     # ---- NG 判定规则表 ----
     reasons = []
     big_blobs = [d for d in defects
-                 if d["type"] in ("scratch", "stain", "chip") and
+                 if d["type"] in config.AREA_BLOB_TYPES and
                  d["area_px"] > config.DEFECT_AREA_NG_PX]
     if big_blobs:
         reasons.append(f"缺陷面积超阈值({len(big_blobs)}处)")

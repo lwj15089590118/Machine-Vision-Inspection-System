@@ -139,7 +139,7 @@ def plan_defects(rng: np.random.Generator) -> list:
     随机规划 1~2 个类型不重复的缺陷（全部为基准坐标系参数）。
     返回缺陷参数字典列表，绘制与真值输出共用。
     """
-    all_types = ["scratch", "chip", "stain", "bolt_shift", "bolt_missing"]
+    all_types = list(config.INJECTABLE_TYPES)      # 注册表派生（config 单源）
     n = int(rng.integers(1, 3))                    # 1~2 个缺陷
     types = list(rng.choice(all_types, size=n, replace=False))
 

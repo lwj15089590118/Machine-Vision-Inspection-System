@@ -212,10 +212,9 @@ chBeat.setOption({
   }],
 });
 
-/* NG 饼图：类型名 → 中文标签 */
-const TYPE_CN = {scratch: '划痕', chip: '崩边', stain: '污渍',
-                 bolt_shift: '孔偏移', bolt_missing: '孔缺失',
-                 locate_fail: '定位失败'};
+/* NG 饼图：类型名 → 中文标签（由后端 config.DEFECT_TYPES 注册表注入，
+   新增缺陷类型无需改动本文件） */
+const TYPE_CN = {{ type_cn | tojson }};
 chPie.setOption({
   tooltip: {trigger: 'item', formatter: '{b}: {c} 次 ({d}%)'},
   legend: {bottom: 0, textStyle: {color: '#7d8a99', fontSize: 11}},

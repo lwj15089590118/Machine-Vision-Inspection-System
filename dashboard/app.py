@@ -142,8 +142,8 @@ def trim_record(r: dict) -> dict:
 # ----------------------------------------------------------------
 @app.route("/")
 def index():
-    """看板单页"""
-    return render_template("index.html")
+    """看板单页（缺陷类型中文名由 config 注册表注入，前端不再自带副本）"""
+    return render_template("index.html", type_cn=config.DEFECT_CN)
 
 
 @app.route("/annot/<path:name>")
