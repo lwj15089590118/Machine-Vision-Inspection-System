@@ -1,1 +1,1 @@
-{"result": "NG", "defect_types": ["bolt_shift"], "confidence": 0.854, "duration_ms": 148.71, "hole_max_offset_mm": 1.249, "locate": {"angle_deg": -4.311}}
+{"result": "NG", "defect_types": ["bolt_missing"], "confidence": 0.867, "duration_ms": 102.76, "hole_max_offset_mm": 0.062, "locate": {"angle_deg": 1.539}}
