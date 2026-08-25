@@ -127,6 +127,8 @@ REG_DEV_Y     = 5    # HR5 : Y 定位偏差，0.01mm 单位，有符号
 REG_ANGLE     = 6    # HR6 : 工件角度，0.1° 单位，有符号
 REG_HEARTBEAT = 10   # HR10: 心跳计数（视觉端每处理一轮 +1）
 
+N_REGS = 16          # 寄存器区总长（HR0~HR15，预留扩展）
+
 BUSY_IDLE, BUSY_BUSY, BUSY_DONE = 0, 1, 2
 RESULT_NONE, RESULT_OK, RESULT_NG, RESULT_FAULT = 0, 1, 2, 999
 
@@ -177,6 +179,35 @@ def from_int16(raw: int) -> int:
     """把 Modbus 16bit 寄存器值还原为有符号整数（两补码解析）"""
     raw &= 0xFFFF
     return raw - 0x10000 if raw >= 0x8000 else raw
+
+
+# ----------------------------------------------------------------
+# 定点数编解码（HR4/5/6 的缩放系数与打包/解包唯一出处）
+# ----------------------------------------------------------------
+# 上位机与视觉端必须使用同一组系数；此前编码在 plc_server、解码在
+# modbus_client_test 各写一遍字面量，改精度要两头同步。
+DEV_SCALE_MM = 100      # HR4/HR5 定位偏差：0.01mm/LSB
+ANGLE_SCALE_DEG = 10    # HR6 角度：0.1°/LSB
+
+
+def pack_dev_mm(v_mm: float) -> int:
+    """定位偏差(mm) → 寄存器原码（四舍五入到 0.01mm，两补码）"""
+    return to_int16(round(v_mm * DEV_SCALE_MM))
+
+
+def pack_angle_deg(v_deg: float) -> int:
+    """角度(°) → 寄存器原码（四舍五入到 0.1°，两补码）"""
+    return to_int16(round(v_deg * ANGLE_SCALE_DEG))
+
+
+def unpack_dev_mm(raw: int) -> float:
+    """寄存器原码 → 定位偏差(mm)"""
+    return from_int16(raw) / DEV_SCALE_MM
+
+
+def unpack_angle_deg(raw: int) -> float:
+    """寄存器原码 → 角度(°)"""
+    return from_int16(raw) / ANGLE_SCALE_DEG
 
 
 # ================================================================

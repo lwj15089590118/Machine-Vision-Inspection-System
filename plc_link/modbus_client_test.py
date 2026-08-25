@@ -144,9 +144,9 @@ def main() -> None:
                                              config.RESULT_NG),
                f"HR2={result_code}"
                f"({'OK' if result_code == 1 else 'NG'})")
-        dev_x_mm = config.from_int16(read_reg(client, config.REG_DEV_X)) / 100
-        dev_y_mm = config.from_int16(read_reg(client, config.REG_DEV_Y)) / 100
-        angle = config.from_int16(read_reg(client, config.REG_ANGLE)) / 10
+        dev_x_mm = config.unpack_dev_mm(read_reg(client, config.REG_DEV_X))
+        dev_y_mm = config.unpack_dev_mm(read_reg(client, config.REG_DEV_Y))
+        angle = config.unpack_angle_deg(read_reg(client, config.REG_ANGLE))
         report("定位偏差在合理范围（±10mm）",
                abs(dev_x_mm) <= 10.0 and abs(dev_y_mm) <= 10.0,
                f"X={dev_x_mm:+.2f}mm Y={dev_y_mm:+.2f}mm θ={angle:+.1f}°")

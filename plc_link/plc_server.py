@@ -74,9 +74,6 @@ import vision_pipeline as vp
 logging.getLogger("pymodbus").setLevel(logging.WARNING)
 
 
-N_REGS = 16                      # 寄存器区长度（HR0~HR15，预留扩展）
-
-
 class VisionService:
     """Modbus 从站 + 视觉服务主循环（单进程，两个线程）"""
 
@@ -97,7 +94,7 @@ class VisionService:
 
         # Modbus 数据存储：HR0~HR15 全 0 初始；zero_mode=True 使地址 0 即 HR0
         store = ModbusSlaveContext(
-            hr=ModbusSequentialDataBlock(0, [0] * N_REGS),
+            hr=ModbusSequentialDataBlock(0, [0] * config.N_REGS),
             zero_mode=True)
         self.context = ModbusServerContext(slaves=store, single=True)
 
@@ -187,14 +184,14 @@ class VisionService:
             self.write_reg(config.REG_DEFECT, defect_code)
             if result["locate"].get("ok"):
                 self.write_reg(config.REG_DEV_X,
-                               config.to_int16(round(
-                                   result["locate"]["center_mm"][0] * 100)))
+                               config.pack_dev_mm(
+                                   result["locate"]["center_mm"][0]))
                 self.write_reg(config.REG_DEV_Y,
-                               config.to_int16(round(
-                                   result["locate"]["center_mm"][1] * 100)))
+                               config.pack_dev_mm(
+                                   result["locate"]["center_mm"][1]))
                 self.write_reg(config.REG_ANGLE,
-                               config.to_int16(round(
-                                   result["locate"]["angle_deg"] * 10)))
+                               config.pack_angle_deg(
+                                   result["locate"]["angle_deg"]))
             self.write_reg(config.REG_HEARTBEAT,
                            (self.read_reg(config.REG_HEARTBEAT) + 1) & 0xFFFF)
             self.write_reg(config.REG_BUSY, config.BUSY_DONE)
