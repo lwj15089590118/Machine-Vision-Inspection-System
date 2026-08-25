@@ -52,6 +52,7 @@ if __package__ in (None, ""):
     sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
 import config
+import part_model
 
 # ================================================================
 # 模板与基准小图缓存（首次调用时生成，之后复用）
@@ -295,15 +296,11 @@ def locate(img: np.ndarray) -> dict:
     theta_c, angle_score = angle_coarse(gray, center, radius)
     theta = angle_keyway_refine(gray, center, radius, theta_c)
 
-    # 4) 毫米坐标（相对基准位姿中心；标定结果存在则用实测像素当量）
-    try:
-        from calib.calibrate import px_to_mm
-        mmx, mmy = px_to_mm(center[0], center[1])
-        mmp = None
-    except Exception:
-        mmp = config.MM_PER_PIXEL
-        mmx = (center[0] - config.CANON_CENTER[0]) * mmp
-        mmy = (center[1] - config.CANON_CENTER[1]) * mmp
+    # 4) 毫米坐标（相对基准位姿中心；像素当量走 part_model 权威：
+    #    新鲜标定 > config 设定。原点口径保持"相对基准位姿中心"）
+    mmp = part_model.mm_per_pixel()
+    mmx = (center[0] - config.CANON_CENTER[0]) * mmp
+    mmy = (center[1] - config.CANON_CENTER[1]) * mmp
 
     return {
         "ok": True,

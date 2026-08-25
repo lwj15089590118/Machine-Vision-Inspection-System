@@ -57,6 +57,7 @@ import numpy as np
 import cv2
 
 import config
+import part_model
 from locate.locate import locate, draw_result as draw_locate
 from part_model import make_reference, pose_matrix, apply_affine, \
     bolt_centers_canonical
@@ -459,9 +460,9 @@ def holes_branch(warped: np.ndarray) -> dict:
             # 亚像素精修：匹配窗口判断用霍夫粗值即可，几何量必须精测
             fx, fy, fr = _refine_circle(warped, (x, y), r)
             off_px = math.hypot(fx - ex, fy - ey)
-            off_mm = off_px * config.MM_PER_PIXEL
+            off_mm = off_px * part_model.mm_per_pixel()
             dia_dev_mm = abs(2.0 * fr - 2.0 * config.BOLT_HOLE_R_PX) * \
-                config.MM_PER_PIXEL
+                part_model.mm_per_pixel()
             offsets_mm.append(round(off_mm, 3))
             max_off = max(max_off, off_mm)
             max_dia = max(max_dia, dia_dev_mm)
@@ -593,7 +594,8 @@ def inspect(img: np.ndarray, loc: dict = None) -> dict:
         op = apply_affine(M, [px])[0]
         defects.append({"type": "chip",
                         "area_px": ch["area_px"],
-                        "area_mm2": round(ch["area_px"] * 0.01, 2),
+                        "area_mm2": round(part_model.px_area_to_mm2(
+                            ch["area_px"]), 2),
                         "center_px": [round(float(op[0]), 1),
                                       round(float(op[1]), 1)],
                         "bbox_px": None})
@@ -664,7 +666,7 @@ def _to_defect_entry(dtype: str, b: dict, M: np.ndarray) -> dict:
     corners = apply_affine(M, [(x, y), (x + w, y), (x + w, y + h), (x, y + h)])
     return {"type": dtype,
             "area_px": round(b["area_px"], 1),
-            "area_mm2": round(b["area_px"] * 0.01, 2),
+            "area_mm2": round(part_model.px_area_to_mm2(b["area_px"]), 2),
             "center_px": [round(float(op[0]), 1), round(float(op[1]), 1)],
             "bbox_px": [[round(float(px), 1), round(float(py), 1)]
                         for px, py in corners]}

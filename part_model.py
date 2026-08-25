@@ -40,6 +40,35 @@ import config
 
 
 # ================================================================
+# 零、像素当量权威（px↔mm 换算的唯一入口）
+# ================================================================
+_MMP_CACHE = None    # 进程内缓存（标定结果静态，无需每帧重读）
+
+
+def mm_per_pixel() -> float:
+    """
+    像素当量（mm/像素）唯一出处。优先级：新鲜标定 > config 设定值。
+      - data/calib/calibration.json 存在且可解析 → 用标定实测值；
+      - 否则回退 config.MM_PER_PIXEL（未标定的仿真/新产线场景）。
+    locate 原有的 try-import calib 写法即此语义，现收敛为本函数；
+    结果进程内缓存（标定文件不会在运行中变化）。
+    """
+    global _MMP_CACHE
+    if _MMP_CACHE is None:
+        try:
+            from calib.calibrate import get_mm_per_pixel
+            _MMP_CACHE = get_mm_per_pixel()
+        except Exception:
+            _MMP_CACHE = float(config.MM_PER_PIXEL)
+    return _MMP_CACHE
+
+
+def px_area_to_mm2(area_px: float) -> float:
+    """像素面积 → 平方毫米（同一权威的平方，禁止使用点再写 ×0.01）"""
+    return area_px * mm_per_pixel() ** 2
+
+
+# ================================================================
 # 一、全局缓存网格（避免每帧重复构造 800×600 坐标矩阵，批量生成时提速）
 # ================================================================
 _G_XX = None    # 每像素 x 坐标（float32）

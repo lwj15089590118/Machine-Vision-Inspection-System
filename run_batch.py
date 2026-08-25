@@ -41,6 +41,7 @@ import numpy as np
 import cv2
 
 import config
+import part_model
 import detect.detect as detector
 import vision_pipeline as vp
 from simulator.synth import synth_frame
@@ -163,7 +164,7 @@ def run_batch(count: int, defect_rate: float, seed: int,
             ey = loc["center_px"][1] - truth["center_px"][1]
             e_px = math.hypot(ex, ey)
             c_px.append(e_px)
-            c_mm.append(e_px * config.MM_PER_PIXEL)
+            c_mm.append(e_px * part_model.mm_per_pixel())
             a_deg.append((loc["angle_deg"] - truth["angle_deg"]
                           + 180.0) % 360.0 - 180.0)
             s_pct.append((loc["scale"] - truth["scale"])
