@@ -416,7 +416,7 @@ def _refine_circle(warped: np.ndarray, c0: tuple, r0: float) -> tuple:
             float(math.sqrt(max(F + cx * cx + cy * cy, 1.0))))
 
 
-def holes_branch(warped: np.ndarray, blobs: list) -> dict:
+def holes_branch(warped: np.ndarray) -> dict:
     """
     霍夫圆粗检 + 亚像素精修测量 4 个螺栓孔（矫正图分度圆环带内搜索），
     与基准孔位逐一匹配，输出：
@@ -425,7 +425,8 @@ def holes_branch(warped: np.ndarray, blobs: list) -> dict:
     测量链路：霍夫圆给粗位置 → _refine_circle 用径向剖面把圆心/半径修到
     亚像素级 → 再与公差比较。直接用霍夫整数量化结果判定 ±0.5mm 孔位、
     ±0.3mm 孔径公差时量化噪声即超差（批量验收实测为 OK 件误报主源）。
-    blobs（基准比对分支结果）用于辅助确认"孔被填实"（真缺失 vs 霍夫漏检）。
+    "孔被填实"佐证（filled_confirmed）统一由 inspect 主流程在基准比对
+    分支完成后回填——此处不做，避免同一判定逻辑两处维护。
     """
     rr = _grid_rr()
     band = (rr >= HOLE_RING_BAND[0]) & (rr <= HOLE_RING_BAND[1])
@@ -471,15 +472,12 @@ def holes_branch(warped: np.ndarray, blobs: list) -> dict:
                           "offset_mm": round(off_mm, 3),
                           "dia_dev_mm": round(dia_dev_mm, 3)})
         else:
-            # 未匹配到圆：用基准比对分支确认该孔位置是否被"填实"
-            filled = any(abs(b["centroid"][0] - ex) < 14 and
-                         abs(b["centroid"][1] - ey) < 14 and
-                         b["area_px"] > 100 for b in blobs)
+            # 未匹配到圆：filled_confirmed 由 inspect 主流程回填（此处
+            # 基准比对分支尚未运行，拿不到 blobs）
             missing_idx.append(idx)
             offsets_mm.append(None)
             holes.append({"index": idx, "detected_px": None,
-                          "offset_mm": None, "dia_dev_mm": None,
-                          "filled_confirmed": filled})
+                          "offset_mm": None, "dia_dev_mm": None})
 
     return {"holes_found": 4 - len(missing_idx),
             "holes": holes,
@@ -536,7 +534,7 @@ def inspect(img: np.ndarray, loc: dict = None) -> dict:
     # ±10px），是 OK 件误报的主要来源；孔周边事件一律归几何分支管辖。
     # 已判异常的孔不剔除：保留"回填/新孔"特征 blob，供填实佐证
     # （filled_confirmed）与后续分类守卫使用。
-    holes = holes_branch(warped, [])
+    holes = holes_branch(warped)
     canon_holes = bolt_centers_canonical()
     flagged = set(holes["missing_idx"]) | set(holes["shifted_idx"])
     # 未判缺失/偏移的孔：孔缘保护圈在比对掩膜上抠掉（源头抑制亚像素
@@ -606,8 +604,10 @@ def inspect(img: np.ndarray, loc: dict = None) -> dict:
             if "bolt_missing" not in blob_types:
                 blob_types.append("bolt_missing")
             op = apply_affine(M, [canon_holes[idx]])[0]
-            defects.append({"type": "bolt_missing", "area_px": 314.0,
-                            "area_mm2": 3.14,
+            defects.append({"type": "bolt_missing",
+                            # 孔缺失是"该有而没有"的事件，无真实面积——
+                            # 不伪造 area_px（314=π·10² 的假圆面积，曾误导
+                            # 下游把测量值当真值）
                             "center_px": [round(float(op[0]), 1),
                                           round(float(op[1]), 1)],
                             "bbox_px": None})
@@ -617,8 +617,7 @@ def inspect(img: np.ndarray, loc: dict = None) -> dict:
                 blob_types.append("bolt_shift")
             h = holes["holes"][idx]
             op = apply_affine(M, [h["detected_px"]])[0]
-            defects.append({"type": "bolt_shift", "area_px": 314.0,
-                            "area_mm2": 3.14,
+            defects.append({"type": "bolt_shift",
                             "center_px": [round(float(op[0]), 1),
                                           round(float(op[1]), 1)],
                             "offset_mm": h["offset_mm"],
