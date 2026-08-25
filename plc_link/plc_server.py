@@ -77,16 +77,18 @@ logging.getLogger("pymodbus").setLevel(logging.WARNING)
 class VisionService:
     """Modbus 从站 + 视觉服务主循环（单进程，两个线程）"""
 
-    def __init__(self, host: str, port: int, defect_rate: float, seed: int):
+    def __init__(self, host: str, port: int, defect_rate: float, seed: int,
+                 clock=None):
         self.host, self.port = host, port
         self.defect_rate = defect_rate
         self.rng = np.random.default_rng(seed)
         self.seq = 0                          # 检测序号（记录用）
         self.server = None
+        self._clock = clock or time.perf_counter  # 时钟可注入（测试用虚拟钟）
         self._worker = None                   # 当前处理线程
         self._deadline = 0.0                  # 当前处理的看门狗截止时刻
         self._faulted = False                 # 看门狗是否已判故障（作废结果）
-        self._last_hb = time.perf_counter()   # 上次空闲心跳时刻
+        self._last_hb = self._clock()         # 上次空闲心跳时刻
         self._stop = threading.Event()
         self._lock = threading.Lock()         # 保护 _faulted / 寄存器写
         self._loop = None                     # Modbus 从站的 asyncio 事件循环
@@ -218,9 +220,27 @@ class VisionService:
         vp.save_latest_assets(frame, result)
 
     # ---------------- 视觉服务主循环 ----------------
+    def _fire_watchdog(self) -> None:
+        """看门狗动作（唯一实现点）：置故障标志+故障码+完成标志，
+        作废迟到结果，落 FAULT 记录。时刻取自 self._clock()，可注入虚拟钟。"""
+        with self._lock:
+            self._faulted = True
+            self.write_reg(config.REG_RESULT, config.RESULT_FAULT)
+            self.write_reg(config.REG_BUSY, config.BUSY_DONE)
+        self.seq += 1
+        rec = vp.build_record(
+            self.seq, fault=True,
+            duration_ms=config.WATCHDOG_TIMEOUT_S * 1000)
+        self._append_record(rec)
+        print(f"[WATCHDOG] #{self.seq} 处理超时"
+              f"（>{config.WATCHDOG_TIMEOUT_S}s），"
+              f"已写故障码 {config.RESULT_FAULT}")
+
     def run(self) -> None:
         """
         状态机：IDLE（轮询触发+空闲心跳）⇄ BUSY（监测工作线程+看门狗）。
+        所有时刻取自 self._clock()（默认 time.perf_counter），测试可注入
+        虚拟时钟在毫秒级重放看门狗时间线，不必起真服务器睡 4 秒验证。
         """
         print(f"[VISION] 视觉服务主循环启动（缺陷率={self.defect_rate}，"
               f"看门狗={config.WATCHDOG_TIMEOUT_S}s，Ctrl+C 退出）")
@@ -233,7 +253,7 @@ class VisionService:
                         self._faulted = False
                         self.write_reg(config.REG_TRIGGER, 0)   # 清触发
                         self.write_reg(config.REG_BUSY, config.BUSY_BUSY)
-                        self._deadline = time.perf_counter() + \
+                        self._deadline = self._clock() + \
                             config.WATCHDOG_TIMEOUT_S
                         self._worker = threading.Thread(
                             target=self._worker_main, args=(trig,),
@@ -241,7 +261,7 @@ class VisionService:
                         self._worker.start()
                         continue
                     # 空闲心跳：按周期递增（让上位机确认视觉端活着）
-                    now = time.perf_counter()
+                    now = self._clock()
                     if now - self._last_hb >= config.HEARTBEAT_PERIOD_S:
                         self.write_reg(config.REG_HEARTBEAT,
                                        (self.read_reg(
@@ -251,22 +271,8 @@ class VisionService:
                 else:
                     # ---- BUSY：等工作线程结束或看门狗超时 ----
                     if self._worker.is_alive():
-                        if time.perf_counter() > self._deadline:
-                            # 看门狗动作：置故障码+完成标志，作废迟到结果
-                            with self._lock:
-                                self._faulted = True
-                                self.write_reg(config.REG_RESULT,
-                                               config.RESULT_FAULT)
-                                self.write_reg(config.REG_BUSY,
-                                               config.BUSY_DONE)
-                            self.seq += 1
-                            rec = vp.build_record(
-                                self.seq, fault=True,
-                                duration_ms=config.WATCHDOG_TIMEOUT_S * 1000)
-                            self._append_record(rec)
-                            print(f"[WATCHDOG] #{self.seq} 处理超时"
-                                  f"（>{config.WATCHDOG_TIMEOUT_S}s），"
-                                  f"已写故障码 {config.RESULT_FAULT}")
+                        if self._clock() > self._deadline:
+                            self._fire_watchdog()
                             self._worker.join()   # 等工作线程退出（卡死模拟
                                                   # 只睡固定时长，必然结束）
                             self._worker = None
