@@ -121,7 +121,7 @@ python detect/detect.py --image data/images/frame_000002.png   # 有真值时自
 | 类型检出率 | 崩边 100% · 孔缺失 98.6% · 孔偏移 96.9% · 划痕 86.7% · 污渍 78.9% | — |
 | 定位中心误差 | P95 **0.033 mm**（最大 0.051） | ≤0.3mm |
 | 定位角度误差 | P95 **0.466°** | ≤0.8° |
-| 单件节拍（定位+检测） | 平均 **73.8 ms** · P95 80.4ms | ≤400ms |
+| 单件节拍（定位+检测） | 平均 **77.6 ms** · P95 88.2ms | ≤400ms |
 
 代表性样张（来自 seed=42 同一验收流，检出类型与真值一致）：
 
@@ -186,6 +186,8 @@ python detect/detect.py --image data/images/frame_000002.png   # 有真值时自
   重复绑定但请求进先绑定者）。改 `config.py` 的 `DASH_PORT` 后重启。
 - **Modbus 连不上 / 触发无反应**：确认 plc_server 已启动且 502 未被旧进程
   占用（`netstat -ano | findstr :502`）；客户端必须等状态迁移（见上）。
+  502 是特权端口，Linux/macOS 需 root 运行，或改 `config.MODBUS_PORT`
+  （客户端端口同步修改）。
 - **控制台中文乱码**：PowerShell 显示编码问题，不影响文件内容；可
   `python -X utf8 ...` 或用 `chcp 65001`。
 - **ECharts 加载失败**：CDN 不可用时页面会自动切换备用源；内网部署请把
