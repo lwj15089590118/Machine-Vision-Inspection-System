@@ -55,7 +55,9 @@ def build_record(seq: int, result: dict = None, *, fault: bool = False,
     **满键同构**（缺测字段填 None/[]，前端 .length / ?? 兜底从"必需"
     降级为"保险"）。
     """
-    ts = datetime.now().strftime("%H:%M:%S.%f")[:-3]
+    # 时间戳带日期：records.jsonl 跨会话追加，仅时刻无日期会让看板的
+    # 跨会话统计无法区分运行批次（seq 已改为启动续接，同理）
+    ts = datetime.now().strftime("%Y-%m-%d %H:%M:%S.%f")[:-3]
     if fault:
         return {"seq": seq, "ts": ts, "result": "FAULT",
                 "defect_types": ["watchdog"], "defect_code": 0,

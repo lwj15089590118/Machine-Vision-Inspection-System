@@ -82,7 +82,6 @@ class VisionService:
         self.host, self.port = host, port
         self.defect_rate = defect_rate
         self.rng = np.random.default_rng(seed)
-        self.seq = 0                          # 检测序号（记录用）
         self.server = None
         self._clock = clock or time.perf_counter  # 时钟可注入（测试用虚拟钟）
         self._worker = None                   # 当前处理线程
@@ -102,6 +101,28 @@ class VisionService:
 
         config.ensure_dirs()
         self.records_path = config.DATA_DIR / "records.jsonl"
+        # 检测序号从已有记录末尾续接（服务重启不归零，避免看板跨会话
+        # 按 seq 统计时混叠；坏行/无文件从 0 起）
+        self.seq = self._last_seq(self.records_path)
+
+    @staticmethod
+    def _last_seq(path) -> int:
+        """读取 records.jsonl 中最大的有效 seq（无文件/空文件/坏行容忍）"""
+        seq = 0
+        try:
+            with open(path, "r", encoding="utf-8") as f:
+                for line in f:
+                    line = line.strip()
+                    if not line:
+                        continue
+                    try:
+                        seq = max(seq, int(json.loads(line).get("seq") or 0))
+                    except (ValueError, AttributeError,
+                            json.JSONDecodeError):
+                        continue              # 半行/坏行跳过（与看板同口径）
+        except OSError:
+            pass
+        return seq
 
     # ---------------- 寄存器读写助手（服务端直读直写） ----------------
     def read_reg(self, addr: int) -> int:
@@ -161,12 +182,11 @@ class VisionService:
         trigger_code==2 时先睡过看门狗时限再出结果，模拟处理卡死，
         用于验证看门狗逻辑（真实产线对应：相机取图阻塞/算法死循环）。
         """
-        t_start = time.perf_counter()
         if trigger_code == 2:
             time.sleep(config.WATCHDOG_TIMEOUT_S + 1.5)
 
         with self._lock:
-            faulted = self._faulted           # 看门狗已判故障则丢弃结果
+            faulted = self._faulted           # 预检：看门狗已判故障则不再处理
 
         # 1) 合成"相机画面"（按设定缺陷率注入缺陷）
         frame, truth = synth_frame(self.rng, with_defects=True,
@@ -177,9 +197,15 @@ class VisionService:
         if faulted:
             return                             # 迟到的结果作废，不写寄存器
 
-        # 3) 结果写回寄存器
+        # 3) 结果写回寄存器（写前锁内复查 _faulted：处理耗时若在看门狗
+        #    时限附近抖动，看门狗可能已写入故障码 999——上方"处理前快照"
+        #    只能省掉已判故障件的计算，不能作为写回依据；迟到结果必须
+        #    在持锁后再次确认故障未发生，才允许覆盖寄存器）
         defect_code = vp.defect_code_of(result)
         with self._lock:
+            if self._faulted:                  # 迟到结果作废，不得覆盖 999
+                print(f"[VISION] 处理完成但看门狗已判故障，本次结果作废")
+                return
             self.write_reg(config.REG_RESULT,
                            config.RESULT_OK if result["result"] == "OK"
                            else config.RESULT_NG)

@@ -20,7 +20,11 @@ detect/detect.py —— 缺陷检测与 NG 判定模块（系统核心）
        比较，局部内凹 > 6px(0.6mm) 且不在键槽扇区 → 崩边。
     C. 几何测量分支（螺栓孔）
        霍夫圆在螺栓孔分度圆环带内检测 4 孔 → 孔位偏移(mm)与孔径
-       偏差(mm)与公差比较；孔缺失（找不到圆且基准比对确认被填实）。
+       偏差(mm)与公差比较；孔缺失（环带内找不到圆即按安全策略判 NG，
+       属安全侧失效模式；基准比对分支额外给出"孔被填实"佐证字段
+       filled_confirmed 随结果输出，供人工复核区分"真缺失"与
+       "霍夫漏检"——佐证不参与 NG 门控，避免把佐证不足的真缺失
+       豁免成 OK，漏检流出的代价高于误报）。
 
 NG 判定规则表（config 中集中定义）：
     1) 任一缺陷连通域面积 > 30px²(0.3mm²)
@@ -427,7 +431,9 @@ def holes_branch(warped: np.ndarray) -> dict:
     亚像素级 → 再与公差比较。直接用霍夫整数量化结果判定 ±0.5mm 孔位、
     ±0.3mm 孔径公差时量化噪声即超差（批量验收实测为 OK 件误报主源）。
     "孔被填实"佐证（filled_confirmed）统一由 inspect 主流程在基准比对
-    分支完成后回填——此处不做，避免同一判定逻辑两处维护。
+    分支完成后回填并随结果输出——此处不做，避免同一判定逻辑两处维护。
+    注意：该佐证仅作输出供人工复核，不参与"孔缺失"的 NG 门控（见
+    inspect 主流程与文件头说明：缺失按安全策略直接判 NG）。
     """
     rr = _grid_rr()
     band = (rr >= HOLE_RING_BAND[0]) & (rr <= HOLE_RING_BAND[1])
@@ -438,8 +444,6 @@ def holes_branch(warped: np.ndarray) -> dict:
     circles = _hough_holes(roi, config.HOUGH_PARAM2)
     if len(circles) < 4:                       # 一次降阈值重试，抗漏检
         circles = _hough_holes(roi, config.HOUGH_PARAM2 - 6)
-    if len(circles) == 0:
-        circles = []
 
     expected = bolt_centers_canonical()
     used = [False] * len(circles)
@@ -545,7 +549,11 @@ def inspect(img: np.ndarray, loc: dict = None) -> dict:
     hole_mask_pts = [canon_holes[i] for i in range(len(canon_holes))
                      if i not in flagged]
     blobs = diff_branch(warped, hole_mask_pts=hole_mask_pts)
-    # 用基准比对结果回填"孔被填实"佐证（缺失判定的辅助信息）
+    # 用基准比对结果回填"孔被填实"佐证（filled_confirmed：孔位附近存在
+    # 大面积差异 blob，即"该有孔的地方被材料/异物填平"的图像证据）。
+    # 该字段只随结果输出供人工复核，不参与 NG 门控——孔缺失按安全侧
+    # 直接判 NG（见文件头与 NG 规则表注释：佐证不足的真缺失若被豁免，
+    # 漏检流出的代价高于误报）。
     for h in holes["holes"]:
         if h["detected_px"] is None:
             h["filled_confirmed"] = any(
@@ -612,6 +620,12 @@ def inspect(img: np.ndarray, loc: dict = None) -> dict:
                             # 下游把测量值当真值）
                             "center_px": [round(float(op[0]), 1),
                                           round(float(op[1]), 1)],
+                            # 填实佐证：True=基准比对在孔位发现回填特征，
+                            # 支持"真缺失"；False=可能为霍夫漏检，提示人工
+                            # 复核（仅输出，不参与 NG 判定，见上文注释）
+                            "filled_confirmed":
+                                bool(holes["holes"][idx].get(
+                                    "filled_confirmed", False)),
                             "bbox_px": None})
     if holes["shifted_idx"]:
         for idx in holes["shifted_idx"]:

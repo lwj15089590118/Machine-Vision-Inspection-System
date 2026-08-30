@@ -368,7 +368,8 @@ def batch_locate(image_dir=None, truth_dir=None, limit: int = None,
     if not files:
         raise FileNotFoundError(f"{image_dir} 下没有图像，请先运行 simulator/synth.py")
 
-    s_mm = config.MM_PER_PIXEL                  # 误差换算用（像素当量）
+    s_mm = part_model.mm_per_pixel()            # 误差换算用（像素当量权威，
+                                                # 与 locate()/run_batch 同源）
     c_err, a_err, s_err, durs, records = [], [], [], [], []
     fail = 0
     for f in files:

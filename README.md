@@ -75,7 +75,8 @@ python simulator/synth.py --count 20 --defects --seed 42
 :: 3) 批量验收：500 帧 → 检出率/误报率/混淆矩阵/节拍 → docs/测试报告.md
 python run_batch.py --save-annot 6
 
-:: 3.5) 单元测试（标准库 unittest，无需安装依赖）：
+:: 3.5) 单元测试（标准库 unittest 框架；用例依赖 OpenCV/NumPy，
+::      需先完成上面的 pip install -r requirements.txt）：
 python -m unittest discover -s tests
 
 :: 4) PLC 链路联调（两个终端）
@@ -99,7 +100,9 @@ python detect/detect.py --image data/images/frame_000002.png   # 有真值时自
 ## 性能指标（全部为仿真验证值）
 
 环境：Windows 11 · Python 3.12.10 · OpenCV 5.0.0 · CPU 推理
-完整口径见 `docs/测试报告.md` 与 `docs/系统设计说明书.md §7`。
+完整口径见 `docs/测试报告.md` 与 `docs/系统设计说明书.md §7`
+（`data/` 运行产物不入库，**指标口径以 docs/测试报告.md 当前版本为准**；
+机器可读摘要快照 `docs/batch_report.json`，代表性样张见 `docs/img/`）。
 
 ### 相机标定（20 张棋盘格）
 
@@ -119,6 +122,16 @@ python detect/detect.py --image data/images/frame_000002.png   # 有真值时自
 | 定位中心误差 | P95 **0.033 mm**（最大 0.051） | ≤0.3mm |
 | 定位角度误差 | P95 **0.466°** | ≤0.8° |
 | 单件节拍（定位+检测） | 平均 **73.8 ms** · P95 80.4ms | ≤400ms |
+
+代表性样张（来自 seed=42 同一验收流，检出类型与真值一致）：
+
+| 样张 | 内容 |
+|---|---|
+| [docs/img/sample_ok.png](docs/img/sample_ok.png) | OK 件：定位圆+键槽方向线，无缺陷 |
+| [docs/img/sample_scratch.png](docs/img/sample_scratch.png) | 划痕（基准比对分支） |
+| [docs/img/sample_stain_bolt_missing.png](docs/img/sample_stain_bolt_missing.png) | 污渍+孔缺失同帧双检出 |
+| [docs/img/sample_chip.png](docs/img/sample_chip.png) | 崩边（外圆轮廓分支） |
+| [docs/img/sample_bolt_shift.png](docs/img/sample_bolt_shift.png) | 孔位偏移（几何测量分支） |
 
 ### 链路可靠性（仿真验证值）
 
@@ -148,6 +161,7 @@ python detect/detect.py --image data/images/frame_000002.png   # 有真值时自
 ```
 ├── config.py                  全局参数唯一入口（调参只改这里）
 ├── part_model.py              工件基准模型：规范几何/名义外观/黄金资产
+├── vision_pipeline.py         共享流水线层：inspect_frame/记录契约/HR3 编码
 ├── run_batch.py               批量验收 → docs/测试报告.md
 ├── simulator/synth.py         图像合成器 + 真值（组合 part_model，叠加缺陷注入）
 ├── calib/calibrate.py         相机标定 + 像素当量
@@ -157,8 +171,13 @@ python detect/detect.py --image data/images/frame_000002.png   # 有真值时自
 ├── plc_link/modbus_client_test.py  上位机视角端到端自测
 ├── dashboard/app.py           Flask 看板后端
 ├── dashboard/templates/index.html  ECharts 看板页面
-├── tests/test_part_model.py   工件基准模型单元测试（unittest）
-└── docs/                      设计说明书 / 测试报告 / 验收清单 / ADR
+├── tools/metrics_diff.py      重构回归对比工具（METRICS-IDENTICAL）
+├── tests/test_part_model.py       工件基准模型单元测试（unittest）
+├── tests/test_vision_pipeline.py  记录契约/位编码/裁剪层单测
+├── tests/test_watchdog.py     看门狗时间线与竞态单测（虚拟时钟）
+├── resume/                    简历项目描述 / 项目总结 / 面试问答准备
+├── docs/                      设计说明书 / 测试报告 / 验收清单 / ADR / img/ 样张
+└── data/                      运行产物（不入库，固定 seed 可复现）
 ```
 
 ## 常见问题

@@ -150,8 +150,9 @@ def index():
 def annot_file(name: str):
     """标注图静态文件（禁缓存，前端用 ?t=<mtime> 控制刷新）"""
     path = (config.ANNOT_DIR / name).resolve()
-    # 防路径穿越：只允许 ANNOT_DIR 内的文件
-    if not str(path).startswith(str(config.ANNOT_DIR.resolve())) or \
+    # 防路径穿越：只允许 ANNOT_DIR 内的文件（Path 相对关系判断，
+    # 替代旧的字符串前缀比较——同级同名前缀目录可绕过前缀检查）
+    if not path.is_relative_to(config.ANNOT_DIR.resolve()) or \
             not path.exists():
         return jsonify({"error": "file not found"}), 404
     resp = send_file(str(path), mimetype="image/png")

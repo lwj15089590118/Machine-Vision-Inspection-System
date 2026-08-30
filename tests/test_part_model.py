@@ -122,7 +122,7 @@ class GoldenAssetTests(unittest.TestCase):
     def test_template_equals_reference_crop(self):
         tpl = pm.make_template()
         ref, _ = pm.make_reference()
-        m = int(config.FLANGE_R_PX + 30)
+        m = int(config.FLANGE_R_PX + config.TEMPLATE_MARGIN_PX)
         cx, cy = int(config.CANON_CENTER[0]), int(config.CANON_CENTER[1])
         self.assertTrue(np.array_equal(
             tpl, ref[cy - m:cy + m, cx - m:cx + m]))
@@ -186,7 +186,8 @@ class FingerprintTests(unittest.TestCase):
 
     def test_sensitive_to_geometry_and_appearance(self):
         fp0 = pm._template_fingerprint()
-        patches = [("KEYWAY_ANGLE_DEG", 31.0),
+        patches = [("TEMPLATE_MARGIN_PX", 34),
+                   ("KEYWAY_ANGLE_DEG", 31.0),
                    ("BOLT_PC_R_PX", 66.0),
                    ("RING_PERIOD_PX", 20.0),
                    ("BRUSHED_SIGMA", 3.5)]

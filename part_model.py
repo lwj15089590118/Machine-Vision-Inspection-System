@@ -264,7 +264,8 @@ def make_reference() -> tuple:
 
 def make_template() -> np.ndarray:
     """
-    工件匹配模板（用于 cv2.matchTemplate）：基准图中心裁剪、含 30px 余量。
+    工件匹配模板（用于 cv2.matchTemplate）：基准图中心裁剪，余量
+    config.TEMPLATE_MARGIN_PX（与缓存校验、参数指纹共用同一出处）。
 
     带落盘缓存：首次渲染后写入 config.TEMPLATE_PATH，并附带"几何+外观
     参数指纹" sidecar（template.meta.json）。后续进程指纹一致则直接读盘
@@ -279,7 +280,7 @@ def make_template() -> np.ndarray:
 
     ref, _ = make_reference()
     cx, cy = int(config.CANON_CENTER[0]), int(config.CANON_CENTER[1])
-    m = int(config.FLANGE_R_PX + 30)
+    m = int(config.FLANGE_R_PX + config.TEMPLATE_MARGIN_PX)
     tpl = ref[cy - m:cy + m, cx - m:cx + m].copy()
     _save_cached_template(tpl, fp)
     return tpl
@@ -297,6 +298,7 @@ def _template_fingerprint() -> str:
         "version": _ASSET_VERSION,
         "img": [config.IMG_W, config.IMG_H],
         "canon_center": list(config.CANON_CENTER),
+        "template_margin_px": config.TEMPLATE_MARGIN_PX,   # 裁剪余量入指纹
         "geometry": {
             "flange_r_px": config.FLANGE_R_PX,
             "rim_ring_w": config.RIM_RING_W,
@@ -340,7 +342,7 @@ def _load_cached_template(fingerprint: str):
         tpl = cv2.imread(str(png), cv2.IMREAD_GRAYSCALE)
         if tpl is None or tpl.dtype != np.uint8:
             return None
-        m = int(config.FLANGE_R_PX + 30)
+        m = int(config.FLANGE_R_PX + config.TEMPLATE_MARGIN_PX)
         if tpl.shape != (2 * m, 2 * m):       # 尺寸与当前几何不符
             return None
         return tpl

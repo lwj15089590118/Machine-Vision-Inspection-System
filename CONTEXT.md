@@ -36,7 +36,7 @@
 | 寄存器规划 | register map | HR0~HR10 协议：触发/忙闲/结果码/缺陷位/偏差定点数/心跳。地址与位编码单源于 config §六。 | `config.py §六` |
 | 两段式同步 | two-phase sync | 上位机写触发后先等 HR1=1(受理) 再等 HR1=2(完成)，防止读到上一轮残留 DONE。 | `modbus_client_test.wait_done` |
 | 看门狗 | watchdog | 触发后 `WATCHDOG_TIMEOUT_S` 未完成 → 写故障码 999 并作废迟到结果（正常结果与故障互斥，只赢一次）。 | `plc_server.run` |
-| 检测记录流 | records stream | `data/records.jsonl` 追加式 JSON Lines；看板轮询消费。字段契约目前无单一构造点（已知改进项）。 | 写:`plc_server` 读:`dashboard` |
+| 检测记录流 | records stream | `data/records.jsonl` 追加式 JSON Lines；看板轮询消费。字段契约由 `vision_pipeline.build_record` 唯一构造（FAULT 与正常记录满键同构，单测锁定）；seq 跨会话续接、ts 带日期。 | 构造:`vision_pipeline.build_record` 写:`plc_server` 读:`dashboard` |
 | 仿真验证值 | simulated metrics | 全部性能指标均为合成数据上的实测，不等价真实产线性能（项目免责声明的口径）。 | 文档全局 |
 
 ## 决策记录索引

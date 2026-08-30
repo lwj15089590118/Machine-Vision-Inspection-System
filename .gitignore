@@ -1,2 +1,7 @@
+# 运行产物目录：全部可由固定 seed 复现（README/验收清单），不入库；
+# 代表性样张与验收摘要快照保留在 docs/img/ 与 docs/batch_report.json
+data/
+# AI 工具临时目录
 .dsh-vision-toolkit/
+# 字节码缓存
 __pycache__/

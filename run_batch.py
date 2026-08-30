@@ -390,7 +390,9 @@ def write_markdown_report(s: dict, path: Path) -> None:
             L.append(f"| #{x['idx']} | {'+'.join(x['truth'])} | "
                      f"{x['judged']} | {'+'.join(x['missed']) or '—'} | "
                      f"{'+'.join(x['extra']) or '—'} |")
-        L.append("\n对应标注图见 data/annot/ 下 batch_miss_* / batch_fp_* 文件。")
+        L.append("\n错检标注图（data/annot/ 下 batch_miss_* / batch_fp_* / "
+                 "batch_type_*）属运行产物不入库；入库的代表性样张见 "
+                 "docs/img/。")
     else:
         L.append("无错检样本。")
     L.append("")
