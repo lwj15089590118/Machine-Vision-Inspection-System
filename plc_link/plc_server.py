@@ -225,14 +225,14 @@ class VisionService:
             self.write_reg(config.REG_BUSY, config.BUSY_DONE)
 
         # 4) 落盘记录 + 最新标注帧（供 dashboard）
-        self.seq += 1
-        rec = vp.build_record(self.seq, result,
+        seq = self._next_seq()             # 序号锁内单点分配（与看门狗线程
+        rec = vp.build_record(seq, result, # 并发自增收敛到同一把锁）
                               duration_ms=duration_ms,
                               truth_types=[d["type"] for d in
                                            truth["defects"]])
         self._append_record(rec)
         self._save_latest(frame, result)
-        print(f"[VISION] #{self.seq} {result['result']} "
+        print(f"[VISION] #{seq} {result['result']} "
               f"{result['defect_types'] or ''} "
               f"耗时{duration_ms:.0f}ms 真值={rec['truth_defects'] or 'OK件'}")
 
@@ -241,6 +241,17 @@ class VisionService:
         with open(self.records_path, "a", encoding="utf-8") as f:
             f.write(json.dumps(rec, ensure_ascii=False) + "\n")
 
+    def _next_seq(self) -> int:
+        """分配下一条记录序号：锁内单点自增（worker 与看门狗线程共用）。
+
+        `seq += 1` 在 GIL 下并非原子，两个线程各自裸增会丢号/重号；
+        全库只经此一处自增，统一由 self._lock 互斥。调用方必须在**未持
+        锁**时调用（非重入锁），返回值即本次记录应用的序号。
+        """
+        with self._lock:
+            self.seq += 1
+            return self.seq
+
     def _save_latest(self, frame: np.ndarray, result: dict) -> None:
         """保存最新标注帧与结果 JSON（dashboard 展示用；委托共享流水线）"""
         vp.save_latest_assets(frame, result)
@@ -248,17 +259,27 @@ class VisionService:
     # ---------------- 视觉服务主循环 ----------------
     def _fire_watchdog(self) -> None:
         """看门狗动作（唯一实现点）：置故障标志+故障码+完成标志，
-        作废迟到结果，落 FAULT 记录。时刻取自 self._clock()，可注入虚拟钟。"""
+        作废迟到结果，落 FAULT 记录。时刻取自 self._clock()，可注入虚拟钟。
+
+        写 999 前锁内复查 HR1 是否已 DONE（与 _process_once 写回前复查
+        _faulted 同模式）：worker 持锁写完结果后仍在锁外落盘记录/latest，
+        此间主循环时钟可能越过 deadline——本轮结果已送达，看门狗必须
+        让位（不改写 999、不落 FAULT 记录），否则上位机读到故障码而
+        记录流里是正常件，两条通道语义分叉。"""
         with self._lock:
+            if self.read_reg(config.REG_BUSY) == config.BUSY_DONE:
+                print("[WATCHDOG] 超时判定时本轮结果已写回（HR1=DONE），"
+                      "看门狗让位，不覆盖结果")
+                return
             self._faulted = True
             self.write_reg(config.REG_RESULT, config.RESULT_FAULT)
             self.write_reg(config.REG_BUSY, config.BUSY_DONE)
-        self.seq += 1
-        rec = vp.build_record(
-            self.seq, fault=True,
+        seq = self._next_seq()             # 序号锁内单点分配（worker 与
+        rec = vp.build_record(             # 看门狗路径互斥，仍统一入锁）
+            seq, fault=True,
             duration_ms=config.WATCHDOG_TIMEOUT_S * 1000)
         self._append_record(rec)
-        print(f"[WATCHDOG] #{self.seq} 处理超时"
+        print(f"[WATCHDOG] #{seq} 处理超时"
               f"（>{config.WATCHDOG_TIMEOUT_S}s），"
               f"已写故障码 {config.RESULT_FAULT}")
 
@@ -276,7 +297,8 @@ class VisionService:
                     # ---- IDLE：轮询触发 ----
                     trig = self.read_reg(config.REG_TRIGGER)
                     if trig in (1, 2):
-                        self._faulted = False
+                        with self._lock:       # _faulted 读写一律持锁：
+                            self._faulted = False  # 新一轮开始，复位上一轮
                         self.write_reg(config.REG_TRIGGER, 0)   # 清触发
                         self.write_reg(config.REG_BUSY, config.BUSY_BUSY)
                         self._deadline = self._clock() + \
