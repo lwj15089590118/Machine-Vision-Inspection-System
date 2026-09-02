@@ -79,6 +79,10 @@ python run_batch.py --save-annot 6
 ::      需先完成上面的 pip install -r requirements.txt）：
 python -m unittest discover -s tests
 
+:: 3.6) 工件↔文档数字一致性自检（重跑批量后必须执行，防止 README/
+::      测试报告/设计说明书 与 docs/batch_report.json 口径漂移）：
+python tools/doc_consistency.py
+
 :: 4) PLC 链路联调（两个终端）
 :: 终端 A：
 python plc_link/plc_server.py --seed 42
@@ -172,8 +176,10 @@ python detect/detect.py --image data/images/frame_000002.png   # 有真值时自
 ├── dashboard/app.py           Flask 看板后端
 ├── dashboard/templates/index.html  ECharts 看板页面
 ├── tools/metrics_diff.py      重构回归对比工具（METRICS-IDENTICAL）
+├── tools/doc_consistency.py   工件↔文档数字一致性自检（防口径漂移门禁）
 ├── tests/test_part_model.py       工件基准模型单元测试（unittest）
 ├── tests/test_vision_pipeline.py  记录契约/位编码/裁剪层单测
+├── tests/test_doc_consistency.py  工件↔文档一致性单测（含篡改注入用例）
 ├── tests/test_watchdog.py     看门狗时间线与竞态单测（虚拟时钟）
 ├── resume/                    简历项目描述 / 项目总结 / 面试问答准备
 ├── docs/                      设计说明书 / 测试报告 / 验收清单 / ADR / img/ 样张
