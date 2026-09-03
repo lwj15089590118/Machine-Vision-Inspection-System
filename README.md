@@ -1,5 +1,9 @@
 # 工件视觉定位与缺陷检测系统（仿真版）
 
+[![CI](https://github.com/lwj15089590118/Machine-Vision-Inspection-System/actions/workflows/ci.yml/badge.svg?branch=main)](https://github.com/lwj15089590118/Machine-Vision-Inspection-System/actions/workflows/ci.yml)
+![Python](https://img.shields.io/badge/Python-3.12-3776AB?logo=python&logoColor=white)
+![License](https://img.shields.io/badge/License-MIT-green.svg)
+
 > **免责声明（务必阅读）**：本项目为**求职作品集/学习演示用途的仿真项目**，
 > 无真实工业相机与 PLC。工件图像由程序合成（模拟工业相机俯拍画面），PLC
 > 由 Modbus/TCP 从站软件模拟。**README 中所有性能指标均为"仿真验证值"**，
