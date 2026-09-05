@@ -133,13 +133,11 @@ python detect/detect.py --image data/images/frame_000002.png   # 有真值时自
 
 代表性样张（来自 seed=42 同一验收流，检出类型与真值一致）：
 
-| 样张 | 内容 |
-|---|---|
-| [docs/img/sample_ok.png](docs/img/sample_ok.png) | OK 件：定位圆+键槽方向线，无缺陷 |
-| [docs/img/sample_scratch.png](docs/img/sample_scratch.png) | 划痕（基准比对分支） |
-| [docs/img/sample_stain_bolt_missing.png](docs/img/sample_stain_bolt_missing.png) | 污渍+孔缺失同帧双检出 |
-| [docs/img/sample_chip.png](docs/img/sample_chip.png) | 崩边（外圆轮廓分支） |
-| [docs/img/sample_bolt_shift.png](docs/img/sample_bolt_shift.png) | 孔位偏移（几何测量分支） |
+| OK 件（定位圆+键槽方向线） | 污渍+孔缺失同帧双检出 | 孔位偏移（几何测量分支） |
+|---|---|---|
+| ![OK件](docs/img/sample_ok.png) | ![污渍+孔缺失](docs/img/sample_stain_bolt_missing.png) | ![孔位偏移](docs/img/sample_bolt_shift.png) |
+
+其余样张：[划痕（基准比对分支）](docs/img/sample_scratch.png) · [崩边（外圆轮廓分支）](docs/img/sample_chip.png)
 
 ### 链路可靠性（仿真验证值）
 
