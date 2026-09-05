@@ -105,6 +105,12 @@ python locate/locate.py --image data/images/frame_000001.png --truth-dir data/tr
 python detect/detect.py --image data/images/frame_000002.png   # 有真值时自动对照
 ```
 
+## 看板运行实况（真实运行渲染）
+
+![看板实况](docs/img/dashboard.png)
+
+*看板实况：当前帧标注图（定位圆+键槽方向线+缺陷框）、OK/NG/故障统计、单件节拍曲线、NG 缺陷类型分布与最近 50 条检测记录（含孔位偏差/置信度/节拍/真值对照），由 plc_server 检测循环实时写入、经 Modbus 触发联动。*
+
 ## 性能指标（全部为仿真验证值）
 
 环境：Windows 11 · Python 3.12.10 · OpenCV 5.0.0 · CPU 推理
